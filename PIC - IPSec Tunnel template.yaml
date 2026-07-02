@@ -1,0 +1,195 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: a1b2c3d4e5f64789a1234567890abcd1
+      name: 'PIC informatique - Template'
+  templates:
+    - uuid: 51adeb8cbae04dcea264ad1943235410
+      template: 'PIC - IPSec Tunnel template'
+      name: 'PIC - IPSec Tunnel template'
+      description: 'Template ICMP Ping for IPSec Tunnel monitoring between two sites (e.g. Bastia <-> Ajaccio)'
+      readme: |
+        ## Setup
+        
+        Ce template surveille la qualité du tunnel IPSec entre deux sites via des pings ICMP entre les proxys.
+        
+        ### Configuration
+        1. Créer un hôte représentant le tunnel (ex : "Tunnel IPSec Bastia-Ajaccio")
+        2. Définir l'interface de l'hôte avec l'IP du proxy distant (ex : proxy Ajaccio)
+        3. Définir "Monitored by" sur le proxy local (ex : proxy Bastia)
+        4. Appliquer ce template sur cet hôte
+        
+        ### Macros à configurer
+        - `{$ICMP_COUNT}` : Nombre de paquets ICMP envoyés (défaut : 20)
+        - `{$ICMP_LOSS_WARN}` : Seuil de perte de paquets en % (défaut : 20)
+        - `{$ICMP_RESPONSE_TIME_WARN}` : Seuil de latence moyenne en secondes (défaut : 0.15)
+      groups:
+        - name: 'PIC informatique - Template'
+      items:
+        - uuid: 9896e020fe1f4c5cbd533a1624149822
+          name: 'ICMP loss'
+          type: SIMPLE
+          key: 'icmppingloss[,{$ICMP_COUNT}]'
+          value_type: FLOAT
+          units: '%'
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+            - tag: component
+              value: tunnel
+            - tag: monitor
+              value: ipsec-tunnel
+          triggers:
+            - uuid: aed07d4ef4fa406790a7c3daad5b5c2e
+              expression: 'min(/PIC - IPSec Tunnel template/icmppingloss[,{$ICMP_COUNT}],5m)>{$ICMP_LOSS_WARN} and min(/PIC - IPSec Tunnel template/icmppingloss[,{$ICMP_COUNT}],5m)<100'
+              name: 'IPSec Tunnel: High ICMP ping loss'
+              event_name: 'Tunnel IPSec - Perte de paquets élevée ({HOST.NAME})'
+              opdata: 'Perte : {ITEM.LASTVALUE1}'
+              priority: WARNING
+              description: 'Le tunnel IPSec présente une perte de paquets ICMP supérieure à {$ICMP_LOSS_WARN}%.'
+              dependencies:
+                - name: 'IPSec Tunnel: Unavailable by ICMP ping'
+                  expression: 'max(/PIC - IPSec Tunnel template/icmpping[,{$ICMP_COUNT}],#3)=0'
+                  recovery_expression: 'min(/PIC - IPSec Tunnel template/icmpping[,{$ICMP_COUNT}],2m)=1'
+              tags:
+                - tag: scope
+                  value: availability
+                - tag: scope
+                  value: performance
+        - uuid: ff20ec1efb3b4fbb9ff9f535ab8fab59
+          name: 'ICMP response time'
+          type: SIMPLE
+          key: 'icmppingsec[,{$ICMP_COUNT}]'
+          value_type: FLOAT
+          units: s
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+            - tag: component
+              value: tunnel
+            - tag: monitor
+              value: ipsec-tunnel
+          triggers:
+            - uuid: faf1571855c14fe29675303190236d94
+              expression: 'avg(/PIC - IPSec Tunnel template/icmppingsec[,{$ICMP_COUNT}],5m)>{$ICMP_RESPONSE_TIME_WARN}'
+              name: 'IPSec Tunnel: High ICMP ping response time'
+              event_name: 'Tunnel IPSec - Latence élevée ({HOST.NAME})'
+              opdata: 'Latence : {ITEM.LASTVALUE1}'
+              priority: HIGH
+              description: 'La latence moyenne du tunnel IPSec est trop élevée (>{$ICMP_RESPONSE_TIME_WARN}s sur 5 minutes).'
+              dependencies:
+                - name: 'IPSec Tunnel: High ICMP ping loss'
+                  expression: 'min(/PIC - IPSec Tunnel template/icmppingloss[,{$ICMP_COUNT}],5m)>{$ICMP_LOSS_WARN} and min(/PIC - IPSec Tunnel template/icmppingloss[,{$ICMP_COUNT}],5m)<100'
+                - name: 'IPSec Tunnel: Unavailable by ICMP ping'
+                  expression: 'max(/PIC - IPSec Tunnel template/icmpping[,{$ICMP_COUNT}],#3)=0'
+                  recovery_expression: 'min(/PIC - IPSec Tunnel template/icmpping[,{$ICMP_COUNT}],2m)=1'
+              tags:
+                - tag: scope
+                  value: availability
+                - tag: scope
+                  value: performance
+        - uuid: df87b2a03f26449d8c0a9a95d093f8f7
+          name: 'ICMP ping'
+          type: SIMPLE
+          key: 'icmpping[,{$ICMP_COUNT}]'
+          valuemap:
+            name: 'Service state'
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+            - tag: component
+              value: tunnel
+            - tag: monitor
+              value: ipsec-tunnel
+          triggers:
+            - uuid: b33d1ad7bcfe45d39cd57106b45d7e03
+              expression: 'max(/PIC - IPSec Tunnel template/icmpping[,{$ICMP_COUNT}],#3)=0'
+              recovery_mode: RECOVERY_EXPRESSION
+              recovery_expression: 'min(/PIC - IPSec Tunnel template/icmpping[,{$ICMP_COUNT}],2m)=1'
+              name: 'IPSec Tunnel: Unavailable by ICMP ping'
+              event_name: 'Tunnel IPSec - Lien indisponible ({HOST.NAME})'
+              priority: DISASTER
+              description: 'Le tunnel IPSec ne répond plus aux requêtes ICMP depuis 3 tentatives consécutives.'
+              tags:
+                - tag: scope
+                  value: availability
+      tags:
+        - tag: class
+          value: network
+        - tag: target
+          value: icmp
+        - tag: target
+          value: tunnel
+      macros:
+        - macro: '{$ICMP_COUNT}'
+          value: '20'
+          description: 'Nombre de paquets ICMP envoyés par test.'
+          config:
+            type: TEXT
+            section_name: Thresholds
+            label: 'Nombre de paquets ICMP'
+            description: 'Nombre de paquets ICMP envoyés à chaque test. Défaut : 20.'
+            regex: '^[1-9][0-9]*$'
+        - macro: '{$ICMP_LOSS_WARN}'
+          value: '20'
+          description: 'Seuil d''alerte de perte de paquets ICMP en %.'
+          config:
+            type: TEXT
+            priority: '1'
+            section_name: Thresholds
+            label: 'Seuil de perte de paquets ICMP'
+            description: 'Seuil d''alerte de perte de paquets ICMP en %. Entre 0 et 100.'
+            regex: '^-?([0-9]+|(([0-9]+)\.([0-9]+)))$'
+        - macro: '{$ICMP_RESPONSE_TIME_WARN}'
+          value: '0.15'
+          description: 'Seuil HIGH de latence ICMP moyenne en secondes (ex: 0.15 = 150ms).'
+          config:
+            type: TEXT
+            priority: '2'
+            section_name: Thresholds
+            label: 'Seuil HIGH de latence (secondes)'
+            description: 'Latence ICMP moyenne maximale avant alerte HIGH. En secondes — ex : 0.15 = 150ms, 0.05 = 50ms.'
+            required: 'YES'
+            regex: '^([0-9]+(\.[0-9]+)?)$'
+      valuemaps:
+        - uuid: 55ea97b96d054db78e45e5afdbbbfb7b
+          name: 'Service state'
+          mappings:
+            - value: '0'
+              newvalue: Down
+            - value: '1'
+              newvalue: Up
+  graphs:
+    - uuid: bc561d32e3d64450ac8128d1aa2b069f
+      name: 'ICMP loss'
+      yaxismax: '0'
+      graph_items:
+        - color: 1A7C11
+          calc_fnc: ALL
+          item:
+            host: 'PIC - IPSec Tunnel template'
+            key: 'icmppingloss[,{$ICMP_COUNT}]'
+    - uuid: 6c69a81ddc71498b959bf13996a46d87
+      name: 'ICMP ping'
+      yaxismax: '0'
+      graph_items:
+        - color: 1A7C11
+          calc_fnc: ALL
+          item:
+            host: 'PIC - IPSec Tunnel template'
+            key: 'icmpping[,{$ICMP_COUNT}]'
+    - uuid: b4e72c913a584f1dae907c2d5f8e1b34
+      name: 'ICMP response time'
+      yaxismax: '0'
+      graph_items:
+        - color: 1A7C11
+          calc_fnc: ALL
+          item:
+            host: 'PIC - IPSec Tunnel template'
+            key: 'icmppingsec[,{$ICMP_COUNT}]'

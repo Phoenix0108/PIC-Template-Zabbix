@@ -1,0 +1,3523 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: c5381dc540504dbba10e2d300554e4cd
+      name: Firewall
+    - uuid: a1b2c3d4e5f64789a1234567890abcd1
+      name: 'PIC informatique - Template'
+  templates:
+    - uuid: 9a25f655bfb248e591b201965a99e6d6
+      template: 'PIC Ubiquiti Firewall by SNMP'
+      name: 'PIC Ubiquiti Firewall by SNMP'
+      description: |
+        Overview
+        This template monitors Ubiquiti UniFi Security Gateway (USG), UniFi Dream Machine (UDM), and EdgeRouter series devices using SNMPv2.
+        It provides metrics on system health, interfaces, CPU, memory, active sessions, and basic traffic statistics.
+        
+        Features
+        - Device identification (model, name, location, uptime)
+        - CPU and memory utilisation tracking
+        - Interface traffic (in/out) and operational status
+        - Active session count (established connections)
+        - SNMP-based discovery of physical interfaces
+        - Basic triggers for CPU/memory overuse and interface state change
+        - Graphs for bandwidth and session statistics
+        
+        Items
+        - System info (uptime, hostname, description)
+        - CPU and memory usage
+        - Active session count
+        - Per-interface byte counters and status
+        
+        Discovery rules
+        - Physical interface discovery using `ifDescr` and `ifOperStatus`
+        
+        Item prototypes
+        - Interface in/out bytes per second
+        - Interface operational status
+        
+        Trigger prototypes
+        - Interface down alert
+        - High CPU/memory usage alerts (optional based on thresholds)
+        
+        Graph prototypes
+        - Interface traffic overview (in/out)
+        - Session count trends
+        
+        Supported devices
+        - Ubiquiti UniFi Security Gateway (USG/USG-Pro)
+        - Ubiquiti EdgeRouter series (ER-X, ER-4, ER-12, etc.)
+        - UniFi Dream Machine (basic support, SNMP limitations apply)
+        
+        Notes
+        - Requires SNMP enabled on the device and allowed from the Zabbix proxy/server
+        - Interface counters are in octets and converted to bits per second
+        - SNMP agent responses may vary slightly across firmware or product lines
+        
+        Author: Simon Jackson / @sjackson0109
+      groups:
+        - name: Firewall
+        - name: 'PIC informatique - Template'
+      items:
+        - uuid: e4bc123f8c1144f488cfc6af9e812580
+          name: 'Device Contact'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.1.4.0
+          key: system.contact
+          delay: 6h
+          history: 30d
+          value_type: TEXT
+          description: 'Contact details for the device administrator, pulled from SNMP sysContact.'
+          tags:
+            - tag: Component
+              value: System
+        - uuid: 3fe70b0ab46e4578b0c6d2c126cf41e6
+          name: 'Device Location'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.1.6.0
+          key: system.location
+          delay: 6h
+          history: 30d
+          value_type: TEXT
+          description: 'System location string as configured on the device SNMP agent.'
+          tags:
+            - tag: Component
+              value: System
+        - uuid: efe5ff4666554b02b2f33621ee16972e
+          name: 'Device Name'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.1.5.0
+          key: system.name
+          delay: 6h
+          history: 30d
+          value_type: TEXT
+          description: 'System name or hostname as defined by SNMP on the device.'
+          tags:
+            - tag: Component
+              value: System
+        - uuid: 1742a4a4f9ff40ceae4ddfa55c410475
+          name: 'Device Uptime'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.1.3.0
+          key: system.uptime
+          delay: 1h
+          history: 30d
+          trends: '0'
+          units: s
+          description: 'The time since the network management portion of the system was last re-initialised.'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+          tags:
+            - tag: Component
+              value: System
+          triggers:
+            - uuid: c95907d96d384661b93b159b3b97d652
+              expression: 'last(/PIC Ubiquiti Firewall by SNMP/system.uptime)<{$UBIQUITI_UPTIME_MIN}'
+              name: 'Device rebooted recently'
+              status: DISABLED
+              priority: WARNING
+              description: |
+                The device has restarted within the last 10 minutes.
+                This could indicate planned maintenance or unexpected reboot.
+              manual_close: 'YES'
+              tags:
+                - tag: Component
+                  value: System
+                - tag: Metrics
+                  value: Uptime
+                - tag: Symptom
+                  value: Stability
+        - uuid: dbd2dfee5b5c4ef2b3fbc67c4c5a526b
+          name: 'CPU Utilisation'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.11.11.0
+          key: ubiquiti.cpu.utilisation
+          history: 30d
+          value_type: FLOAT
+          units: '%'
+          description: 'CPU utilisation percentage over the last 1 minute.'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+            - type: MULTIPLIER
+              parameters:
+                - '10'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - '3600'
+          tags:
+            - tag: Component
+              value: CPU
+            - tag: Metrics
+              value: Performance
+          triggers:
+            - uuid: eb62f50e2f03496eb00118b359964174
+              expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.cpu.utilisation,#5)>{$UBIQUITI_CPU_UTIL_MAX}'
+              name: 'High CPU Utilisation'
+              status: DISABLED
+              priority: AVERAGE
+              description: 'CPU utilisation exceeds {$UBIQUITI_CPU_UTIL_MAX}% averaged across 5 samples. High CPU usage may impact routing performance and responsiveness.'
+              manual_close: 'YES'
+              tags:
+                - tag: Component
+                  value: CPU
+                - tag: Metrics
+                  value: Utilisation
+                - tag: Severity
+                  value: Threshold
+        - uuid: 142e485141f148f992ff7ed62b4feea9
+          name: 'Memory Available'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.4.6.0
+          key: ubiquiti.memory.available
+          history: 30d
+          units: B
+          description: 'Available real memory (free physical RAM) in bytes.'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - '3600'
+          tags:
+            - tag: Component
+              value: RAM
+            - tag: Metrics
+              value: Performance
+        - uuid: 2d08e0be8f8a4c3581285d1badef0de9
+          name: 'Memory Total'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.4.5.0
+          key: ubiquiti.memory.total
+          history: 30d
+          units: B
+          description: 'Total real memory (physical RAM) in bytes.'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - '3600'
+          tags:
+            - tag: Component
+              value: RAM
+            - tag: Metrics
+              value: Performance
+        - uuid: ee4aa351f10c48ff950778ae6a52afdc
+          name: 'Active Sessions'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.255.10.0
+          key: ubiquiti.sessions.active
+          history: 30d
+          description: 'Current number of active tracked sessions (e.g., via conntrack or session table). Requires custom SNMP extend.'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - '3600'
+          tags:
+            - tag: Component
+              value: Firewall
+            - tag: Metrics
+              value: Sessions
+          triggers:
+            - uuid: 6a40040f960d42fabc3dd51aeb895055
+              expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.sessions.active,#5)>{$UBIQUITI_SESSION_COUNT_MAX}'
+              name: 'High session count'
+              status: DISABLED
+              priority: AVERAGE
+              description: 'High session count detected over 5 samples. May indicate scanning, DoS, or high concurrent usage.'
+              tags:
+                - tag: Component
+                  value: Firewall
+                - tag: Metrics
+                  value: Sessions
+        - uuid: 701f74b75c434bc6b76aa26fc0abe3d0
+          name: 'Swap Available'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.4.6.0
+          key: ubiquiti.swap.available
+          history: 30d
+          units: B
+          description: 'Available swap memory in bytes.'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - '3600'
+          tags:
+            - tag: Component
+              value: RAM
+            - tag: Metrics
+              value: Performance
+        - uuid: 263c542827b14a6e9866578c6b65d95c
+          name: 'Swap Total'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.4.3.0
+          key: ubiquiti.swap.total
+          history: 30d
+          units: B
+          description: 'Total swap space in bytes.'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - '3600'
+          tags:
+            - tag: Component
+              value: RAM
+            - tag: Metrics
+              value: Performance
+        - uuid: 22c7305f45e34c28addb9db818de5585
+          name: 'Disk Throughput Read'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.11.6.0
+          key: ubiquiti.system.io.read
+          delay: 5m
+          history: 30d
+          units: Bps
+          description: 'Disk read throughput in bytes per second.'
+          preprocessing:
+            - type: CHANGE_PER_SECOND
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - '3600'
+          tags:
+            - tag: Component
+              value: IO
+            - tag: Metrics
+              value: Performance
+        - uuid: 6370180ac7884d3abf00e50c33237cc7
+          name: 'Disk Throughput Write'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.11.5.0
+          key: ubiquiti.system.io.write
+          delay: 5m
+          history: 30d
+          units: Bps
+          description: 'Disk write throughput in bytes per second.'
+          preprocessing:
+            - type: CHANGE_PER_SECOND
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - '3600'
+          tags:
+            - tag: Component
+              value: IO
+            - tag: Metrics
+              value: Performance
+      discovery_rules:
+        - uuid: 8522201028d94159872dc89944915456
+          name: 'Disk I/O'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#DISKINDEX},.1.3.6.1.4.1.2021.13.15.1.1.1,{#DISKDEVICE},.1.3.6.1.4.1.2021.13.15.1.1.2]'
+          key: ubiquiti.diskio.discovery
+          delay: 1h
+          filter:
+            conditions:
+              - macro: '{#DISKDEVICE}'
+                value: '^(mmcblk0(p[0-9]+)?|zram[0-9]+)$'
+          description: 'Discovers eMMC block devices (mmcblk0 and its partitions) and zram compressed swap devices via the UCD-SNMP diskIO table. Excludes loop devices, MTD block devices, and boot partitions, which carry no useful I/O metrics.'
+          item_prototypes:
+            - uuid: a26aed0f6f234887ad54b5a891a56028
+              name: 'Disk {#DISKDEVICE} Bytes Read/s'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.2021.13.15.1.1.12.{#DISKINDEX}'
+              key: 'ubiquiti.diskio.read.bytes[{#DISKINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              description: 'Rate of bytes read from {#DISKDEVICE} (diskIONReadX, 64-bit counter).'
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Disk
+                - tag: Device
+                  value: '{#DISKDEVICE}'
+                - tag: Metrics
+                  value: IO
+            - uuid: b16bbc7af2c04a8eac3ed7e8aa4ba015
+              name: 'Disk {#DISKDEVICE} Read Ops/s'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.2021.13.15.1.1.5.{#DISKINDEX}'
+              key: 'ubiquiti.diskio.read.ops[{#DISKINDEX}]'
+              delay: 2m
+              history: 30d
+              description: 'Rate of read operations on {#DISKDEVICE} (diskIOReads).'
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Disk
+                - tag: Device
+                  value: '{#DISKDEVICE}'
+                - tag: Metrics
+                  value: IO
+            - uuid: ba7d754112ab49e78bf22ee5a574b895
+              name: 'Disk {#DISKDEVICE} Bytes Written/s'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.2021.13.15.1.1.13.{#DISKINDEX}'
+              key: 'ubiquiti.diskio.write.bytes[{#DISKINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              description: 'Rate of bytes written to {#DISKDEVICE} (diskIONWrittenX, 64-bit counter).'
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Disk
+                - tag: Device
+                  value: '{#DISKDEVICE}'
+                - tag: Metrics
+                  value: IO
+            - uuid: 94d380561766439780f747e68a96af3a
+              name: 'Disk {#DISKDEVICE} Write Ops/s'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.2021.13.15.1.1.6.{#DISKINDEX}'
+              key: 'ubiquiti.diskio.write.ops[{#DISKINDEX}]'
+              delay: 2m
+              history: 30d
+              description: 'Rate of write operations on {#DISKDEVICE} (diskIOWrites).'
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Disk
+                - tag: Device
+                  value: '{#DISKDEVICE}'
+                - tag: Metrics
+                  value: IO
+          graph_prototypes:
+            - uuid: 637d153f033c459ba1b40d8b0cea19e6
+              name: 'Disk {#DISKDEVICE} I/O Throughput'
+              graph_items:
+                - color: 199C0D
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.diskio.read.bytes[{#DISKINDEX}]'
+                - sortorder: '1'
+                  color: EE4000
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.diskio.write.bytes[{#DISKINDEX}]'
+        - uuid: 0ea3c1089b5f40b7986c0fd08b6631d6
+          name: 'Interfaces (Ethernet)'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFDESCR},1.3.6.1.2.1.2.2.1.2,{#IFTYPE},1.3.6.1.2.1.2.2.1.3]'
+          key: ubiquiti.interface.discovery
+          delay: 1h
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '^eth[0-9]+$'
+              - macro: '{#IFTYPE}'
+                value: ^(6|117|161)$
+          description: 'Discovers physical Ethernet interfaces (eth0, eth1, etc.) via the IF-MIB interface table. Filters on ifDescr matching the eth[0-9]+ pattern and ifType values 6 (ethernetCsmacd), 117 (gigabitEthernet), or 161 (ieee8023adLag). Excludes virtual, tunnel, and bridge interfaces.'
+          item_prototypes:
+            - uuid: 9d8ea2b43a5b4e57add961fa87f9a1cf
+              name: 'Interface: {#IFDESCR} Errors In'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifInErrors.{#SNMPINDEX}'
+              key: 'interface.ifInErrors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              description: 'Inbound error count on interface {#IFDESCR}, converted to bits per second.no'
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: Ethernet
+                - tag: Metrics
+                  value: Errors
+                - tag: Name
+                  value: '{#IFDESCR}'
+              trigger_prototypes:
+                - uuid: 5beca70667b84527884e259adf800a0d
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/interface.ifInErrors[{#SNMPINDEX}],5m) > {$UBIQUITI_INTERFACE_ERROR_THRESHOLD}'
+                  name: 'Interface {#IFDESCR} Inbound Errors High'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: 'Interface {#IFDESCR} is experiencing a high number of RECEIVE errors. This may indicate bad cabling, duplex mismatch, or hardware issues.'
+                  tags:
+                    - tag: Component
+                      value: Interface
+                    - tag: Interface
+                      value: Ethernet
+                    - tag: Symptoms
+                      value: HighErrorCount
+            - uuid: f8b53093f9d645d5a82a8f431a58fec9
+              name: 'Interface: {#IFDESCR} Bytes In'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifInOctets.{#SNMPINDEX}'
+              key: 'interface.ifInOctets[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              description: 'Inbound traffic on interface {#IFDESCR}, in bits per second.'
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: Ethernet
+                - tag: Metrics
+                  value: Traffic
+                - tag: Name
+                  value: '{#IFDESCR}'
+            - uuid: 960e47e6efc94e9da7a12a860e8c4bd1
+              name: 'Interface: {#IFDESCR} Errors Out'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifOutErrors.{#SNMPINDEX}'
+              key: 'interface.ifOutErrors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              description: 'Outbound error count on interface {#IFDESCR}, converted to bits per second.'
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: Ethernet
+                - tag: Metrics
+                  value: Errors
+                - tag: Name
+                  value: '{#IFDESCR}'
+              trigger_prototypes:
+                - uuid: 7637abf514b347b68ed1b2521692e23d
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/interface.ifOutErrors[{#SNMPINDEX}],5m) > {$UBIQUITI_INTERFACE_ERROR_THRESHOLD}'
+                  name: 'Interface {#IFDESCR} Outbound Errors High'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: 'Interface {#IFDESCR} is experiencing a high number of SEND errors. This may indicate bad cabling, duplex mismatch, or hardware issues.'
+                  tags:
+                    - tag: Component
+                      value: Interface
+                    - tag: Interface
+                      value: Ethernet
+                    - tag: Symptoms
+                      value: HighErrorCount
+            - uuid: 735fc4009f734db6bd3a6d0798876e07
+              name: 'Interface: {#IFDESCR} Bytes Out'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifOutOctets.{#SNMPINDEX}'
+              key: 'interface.ifOutOctets[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: Ethernet
+                - tag: Metrics
+                  value: Traffic
+                - tag: Name
+                  value: '{#IFDESCR}'
+            - uuid: 3ea40a8c05cf40bf84e788467e400777
+              name: 'Interface: {#IFDESCR} Status'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifOperStatus.{#SNMPINDEX}'
+              key: 'interface.status[{#SNMPINDEX}]'
+              history: 30d
+              valuemap:
+                name: interface.status.valuemap
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: Ethernet
+                - tag: Metrics
+                  value: Status
+                - tag: Name
+                  value: '{#IFDESCR}'
+              trigger_prototypes:
+                - uuid: f9cc7391364948cbb1677580cc0efb4d
+                  expression: 'min(/PIC Ubiquiti Firewall by SNMP/interface.status[{#SNMPINDEX}],5m) = 2'
+                  name: 'Interface {#IFDESCR} status changed'
+                  status: DISABLED
+                  priority: WARNING
+                  description: 'Detects when the interface {#IFDESCR} enters a ''down'' state at least once within the last 3 minutes. This may indicate a physical disconnect, link loss, or transient failure. Intended to suppress brief or transitional link-state flaps while still alerting on true interface outages.'
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: Interface
+                    - tag: Interface
+                      value: Ethernet
+                    - tag: Symptom
+                      value: Flap/Down
+          graph_prototypes:
+            - uuid: 613f5a70d9034032b42b0e34fcd5c541
+              name: 'Interface {#IFDESCR} Traffic'
+              graph_items:
+                - color: 199C0D
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'interface.ifInOctets[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 00BFFF
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'interface.ifOutOctets[{#SNMPINDEX}]'
+                - sortorder: '2'
+                  drawtype: FILLED_REGION
+                  color: FF0000
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'interface.ifInErrors[{#SNMPINDEX}]'
+                - sortorder: '3'
+                  drawtype: FILLED_REGION
+                  color: CC6600
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'interface.ifOutErrors[{#SNMPINDEX}]'
+        - uuid: 602b329203904b8781f999be38e6f6d1
+          name: Memory
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#HRSTORAGEINDEX},.1.3.6.1.2.1.25.2.3.1.1,{#HRSTORAGEDESCR},.1.3.6.1.2.1.25.2.3.1.3,{#HRSTORAGEUNIT},.1.3.6.1.2.1.25.2.3.1.4]'
+          key: ubiquiti.memory.discovery
+          delay: 1h
+          filter:
+            conditions:
+              - macro: '{#HRSTORAGEDESCR}'
+                value: '^(Virtual memory|virtual memory|Memory buffers|memory buffers|Cached memory|cached memory|Shared memory|shared memory|Swap space|swap space)$'
+          description: 'Discovers memory-related storage segments via HOST-RESOURCES-MIB::hrStorageTable. Filters for virtual memory, buffers, cache, shared memory, and swap segments. Excludes physical RAM and mounted file systems. Not supported on UCG series devices running UniFi OS 5.x or later, as hrStorageTable is not exposed by the SNMP agent on that platform.'
+          item_prototypes:
+            - uuid: e37bf53627c34d0faaf2557de08c6863
+              name: 'Memory: {#HRSTORAGEDESCR} Total'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.25.2.3.1.5.{#HRSTORAGEINDEX}'
+              key: 'ubiquiti.memory.total.bytes[{#HRSTORAGEINDEX}]'
+              delay: 5m
+              history: 30d
+              units: B
+              description: 'Total available storage memory for {#HRSTORAGEDESCR}, derived from hrStorageSize Ã— hrStorageAllocationUnits.'
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Memory
+                - tag: Metrics
+                  value: Performance
+            - uuid: bb29191f8e694afc872795fb9d0b0c34
+              name: 'Memory: {#HRSTORAGEDESCR} Used'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.25.2.3.1.6.{#HRSTORAGEINDEX}'
+              key: 'ubiquiti.memory.used.bytes[{#HRSTORAGEINDEX}]'
+              delay: 5m
+              history: 30d
+              units: B
+              description: 'Amount of used storage memory for {#HRSTORAGEDESCR}, converted from SNMP allocation units to bytes.'
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Memory
+                - tag: Metrics
+                  value: Performance
+          graph_prototypes:
+            - uuid: 19cfd5e1d6df4a66a36f6e30a0e5b4c6
+              name: 'Memory Footprint (#HRSTORAGEDESCR)'
+              yaxismax: '0'
+              show_work_period: 'NO'
+              show_triggers: 'NO'
+              type: PIE
+              graph_items:
+                - color: 199C0D
+                  calc_fnc: MIN
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.memory.total.bytes[{#HRSTORAGEINDEX}]'
+                - sortorder: '1'
+                  color: 0080FF
+                  calc_fnc: MIN
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.memory.used.bytes[{#HRSTORAGEINDEX}]'
+        - uuid: 9433915772924eba9fbea27a434e3440
+          name: Processes
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#PROCESSINDEX},1.3.6.1.4.1.2021.2.1.1,{#PROCESSNAME},1.3.6.1.4.1.2021.2.1.2]'
+          key: ubiquiti.process.discovery
+          delay: 1h
+          filter:
+            conditions:
+              - macro: '{#PROCESSNAME}'
+                value: '^(?!kworker|migration|rcu|watchdog).*'
+          description: 'Discovers running processes via the UCD-SNMP process table (prTable). Excludes kernel threads such as kworker, migration, rcu, and watchdog, which are not user-space processes and carry no meaningful monitoring value.'
+          item_prototypes:
+            - uuid: fa6ebfef846049a7a1637358785d882d
+              name: 'Process: {#PROCESSNAME} Count'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.2021.2.1.5.{#PROCESSINDEX}'
+              key: 'ubiquiti.process.count[{#PROCESSINDEX}]'
+              delay: 2m
+              history: 30d
+              description: 'Number of active processes matching {#PROCESSNAME} currently running.'
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Processes
+                - tag: Metrics
+                  value: Performance
+              trigger_prototypes:
+                - uuid: 933ea110ae924365806385e0d49cfab4
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.process.count[{#PROCESSINDEX}],#5)=0'
+                  name: 'Process {#PROCESSNAME} is not running'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: 'No instances of {#PROCESSNAME} detected over 5 samples. Process may have crashed or failed to start.'
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: Processes
+                    - tag: Symptoms
+                - uuid: 5085ef1f24044ac4b9136bad10954f76
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.process.count[{#PROCESSINDEX}],#5)< {$UBIQUITI_PROCESS_MIN:"{#PROCESSNAME}"}'
+                  name: 'Too few {#PROCESSNAME} processes running'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: 'Average number of running {#PROCESSNAME} processes over 5 samples is below expected threshold.'
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: Processes
+                    - tag: Symptoms
+                - uuid: 94a9103504de41b1bc921780916aaf88
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.process.count[{#PROCESSINDEX}],#5)< {$UBIQUITI_PROCESS_MAX:"{#PROCESSNAME}"}'
+                  name: 'Too many {#PROCESSNAME} processes running'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: 'Average process count over 5 samples for {#PROCESSNAME} exceeds expected range.'
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: Processes
+                    - tag: Symptoms
+        - uuid: 92a84989c7204263958021b53c8b0627
+          name: 'Route Table'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#ROUTEDEST},1.3.6.1.2.1.4.21.1.1,{#ROUTEMASK},1.3.6.1.2.1.4.21.1.11,{#IFINDEX},1.3.6.1.2.1.4.21.1.2]'
+          key: ubiquiti.route.discovery
+          delay: 1h
+          status: DISABLED
+          description: 'Discovers all entries in the IPv4 routing table, mapping route destinations to their outgoing interfaces.'
+          item_prototypes:
+            - uuid: 6511dab8782f4bf99f3df2b667bf8d28
+              name: 'Route: {#ROUTEDEST}/{#ROUTEMASK} Interface Index'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.4.21.1.2.{#ROUTEDEST}'
+              key: 'ubiquiti.route.ifindex[{#ROUTEDEST}/{#ROUTEMASK}]'
+              delay: 15m
+              history: 30d
+              description: 'Interface index for destination {#ROUTEDEST}/{#ROUTEMASK} (based on ipRouteIfIndex).'
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Routing
+                - tag: Route-Destination
+                  value: '{#ROUTEDEST}{#ROUTEMASK}'
+            - uuid: fb43e77a861c441193e901199ea3f98c
+              name: 'Route: {#ROUTEDEST}/{#ROUTEMASK} Metric'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.4.21.1.3.{#ROUTEDEST}'
+              key: 'ubiquiti.route.metric[{#ROUTEDEST}/{#ROUTEMASK}]'
+              delay: 15m
+              history: 30d
+              description: 'Route metric (ipRouteMetric1) for destination {#ROUTEDEST}/{#ROUTEMASK}.'
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Routing
+                - tag: Route-Destination
+                  value: '{#ROUTEDEST}{#ROUTEMASK}'
+            - uuid: 32ab23a6f7034c84acc8de208bc6f5d0
+              name: 'Route: {#ROUTEDEST}/{#ROUTEMASK} Next Hop'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.4.21.1.7.{#ROUTEDEST}'
+              key: 'ubiquiti.route.nexthop[{#ROUTEDEST}/{#ROUTEMASK}]'
+              delay: 15m
+              history: 30d
+              value_type: CHAR
+              description: 'IP address of the next hop for the route to {#ROUTEDEST}/{#ROUTEMASK}. Returns 0.0.0.0 for directly connected routes (type 3).'
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Routing
+                - tag: Route-Destination
+                  value: '{#ROUTEDEST}/{#ROUTEMASK}'
+            - uuid: 5302988d43194a10912ec09d816fc774
+              name: 'Route: {#ROUTEDEST}/{#ROUTEMASK} Type'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.4.21.1.8.{#ROUTEDEST}'
+              key: 'ubiquiti.route.type[{#ROUTEDEST}/{#ROUTEMASK}]'
+              delay: 15m
+              history: 30d
+              description: 'Route type per RFC 1213 ipRouteType: 1=Other, 2=Invalid/deleted, 3=Direct/connected, 4=Indirect/via gateway.'
+              valuemap:
+                name: route.type.valuemap
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Routing
+                - tag: Route-Destination
+                  value: '{#ROUTEDEST}/{#ROUTEMASK}'
+          trigger_prototypes:
+            - uuid: d1eef868020d4ff0904853094fb0a0b8
+              expression: |
+                avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.route.ifindex[{#ROUTEDEST}/{#ROUTEMASK}],#5)<>last(/PIC Ubiquiti Firewall by SNMP/ubiquiti.route.ifindex[{#ROUTEDEST}/{#ROUTEMASK}])
+                    or
+                    last(/PIC Ubiquiti Firewall by SNMP/ubiquiti.route.nexthop[{#ROUTEDEST}/{#ROUTEMASK}])<>last(/PIC Ubiquiti Firewall by SNMP/ubiquiti.route.nexthop[{#ROUTEDEST}/{#ROUTEMASK}],#2)
+              name: 'Route: {#ROUTEDEST}/{#ROUTEMASK} path changed'
+              status: DISABLED
+              priority: INFO
+              description: |
+                Detected a stable change in routing for {#ROUTEDEST}/{#ROUTEMASK}.
+                The outgoing interface or next hop has altered consistently over 5 polling cycles.
+                This may indicate BGP convergence, VPN tunnel drop or fallback routing.
+              manual_close: 'YES'
+              tags:
+                - tag: Component
+                  value: Routing
+                - tag: Route
+                  value: '{#ROUTEDEST}/{#ROUTEMASK}'
+                - tag: Type
+                  value: PathChange
+          preprocessing:
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.255.255
+                - '32'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.255.254
+                - '31'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.255.252
+                - '30'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.255.248
+                - '29'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.255.240
+                - '28'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.255.224
+                - '27'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.255.192
+                - '26'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.255.128
+                - '25'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.255.0
+                - '24'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.254.0
+                - '23'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.252.0
+                - '22'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.248.0
+                - '21'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.240.0
+                - '20'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.224.0
+                - '19'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.192.0
+                - '18'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.128.0
+                - '17'
+            - type: STR_REPLACE
+              parameters:
+                - 255.255.0.0
+                - '16'
+            - type: STR_REPLACE
+              parameters:
+                - 255.254.0.0
+                - '15'
+            - type: STR_REPLACE
+              parameters:
+                - 255.252.0.0
+                - '14'
+            - type: STR_REPLACE
+              parameters:
+                - 255.248.0.0
+                - '13'
+            - type: STR_REPLACE
+              parameters:
+                - 255.240.0.0
+                - '12'
+            - type: STR_REPLACE
+              parameters:
+                - 255.224.0.0
+                - '11'
+            - type: STR_REPLACE
+              parameters:
+                - 255.192.0.0
+                - '10'
+            - type: STR_REPLACE
+              parameters:
+                - 255.128.0.0
+                - '9'
+            - type: STR_REPLACE
+              parameters:
+                - 255.0.0.0
+                - '8'
+            - type: STR_REPLACE
+              parameters:
+                - 254.0.0.0
+                - '7'
+            - type: STR_REPLACE
+              parameters:
+                - 252.0.0.0
+                - '6'
+            - type: STR_REPLACE
+              parameters:
+                - 248.0.0.0
+                - '5'
+            - type: STR_REPLACE
+              parameters:
+                - 240.0.0.0
+                - '4'
+            - type: STR_REPLACE
+              parameters:
+                - 224.0.0.0
+                - '3'
+            - type: STR_REPLACE
+              parameters:
+                - 192.0.0.0
+                - '2'
+            - type: STR_REPLACE
+              parameters:
+                - 128.0.0.0
+                - '1'
+            - type: STR_REPLACE
+              parameters:
+                - 0.0.0.0
+                - '0'
+        - uuid: ccf61244d51a485d87e1fa4bf39bfcf2
+          name: 'Interfaces (VLAN)'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFDESCR},1.3.6.1.2.1.2.2.1.2,{#IFTYPE},1.3.6.1.2.1.2.2.1.3]'
+          key: ubiquiti.vlan.discovery
+          delay: 1h
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '^switch[0-9]+\.[0-9]+$'
+              - macro: '{#IFTYPE}'
+                value: ^(6|53|135)$
+          description: 'Discovers VLAN sub-interfaces (switch0.x) via the IF-MIB interface table. Filters on ifDescr matching the switch[0-9]+\.[0-9]+ pattern and ifType values 6 (ethernetCsmacd), 53 (propVirtual), or 135 (mpls). Extracts the VLAN ID from the interface name suffix via JavaScript pre-processing.'
+          item_prototypes:
+            - uuid: fb7c3ade35b84540b97a0ce7e55e9025
+              name: 'VLAN {#VLANID}: Bytes In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.31.1.1.1.6.{#SNMPINDEX}'
+              key: 'vlan.bytes.in[{#VLANID}]'
+              history: 30d
+              value_type: FLOAT
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: VLAN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VLAN
+                  value: '{#VLANID}'
+            - uuid: 07e60f53e4ab4cdbab24d8d53d269bae
+              name: 'VLAN {#VLANID}: Bytes Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.31.1.1.1.10.{#SNMPINDEX}'
+              key: 'vlan.bytes.out[{#VLANID}]'
+              history: 30d
+              value_type: FLOAT
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: VLAN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VLAN
+                  value: '{#VLANID}'
+            - uuid: eba9534eff8f484e9019fa2e23b40f72
+              name: 'VLAN {#VLANID}: Errors In'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifInErrors.{#SNMPINDEX}'
+              key: 'vlan.errors.in[{#VLANID}]'
+              delay: 2m
+              history: 30d
+              value_type: FLOAT
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: VLAN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VLAN
+                  value: '{#VLANID}'
+              trigger_prototypes:
+                - uuid: 7ea2f505222347259ca36ec0bc37521a
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/vlan.errors.in[{#VLANID}],5m) > {$UBIQUITI_VLAN_ERROR_THRESHOLD}'
+                  name: 'VLAN {#VLANID}: Inbound Errors High'
+                  status: DISABLED
+                  priority: AVERAGE
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: Interface
+                    - tag: Interface
+                      value: VLAN
+                    - tag: Symptom
+                      value: Config/Trunk
+                    - tag: VLAN
+                      value: '{#VLANID}'
+            - uuid: 49d944f6165d4603aa732d7c109e44c4
+              name: 'VLAN {#VLANID}: Errors Out'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifOutErrors.{#SNMPINDEX}'
+              key: 'vlan.errors.out[{#VLANID}]'
+              delay: 2m
+              history: 30d
+              value_type: FLOAT
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: VLAN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VLAN
+                  value: '{#VLANID}'
+              trigger_prototypes:
+                - uuid: 1d7b6ad36015478fbcce5c9f469f5e22
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/vlan.errors.out[{#VLANID}],5m) > {$UBIQUITI_VLAN_ERROR_THRESHOLD}'
+                  name: 'VLAN {#VLANID}: Outbound Errors High'
+                  status: DISABLED
+                  priority: AVERAGE
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: Interface
+                    - tag: Interface
+                      value: VLAN
+                    - tag: Symptom
+                      value: Config/Trunk
+                    - tag: VLAN
+                      value: '{#VLANID}'
+            - uuid: 09f326e610d9411bb9736be928a91c89
+              name: 'VLAN {#VLANID}: Status'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifOperStatus.{#SNMPINDEX}'
+              key: 'vlan.status[{#VLANID}]'
+              history: 30d
+              valuemap:
+                name: interface.status.valuemap
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: VLAN
+                - tag: Metrics
+                  value: Status
+                - tag: VLAN
+                  value: '{#VLANID}'
+              trigger_prototypes:
+                - uuid: 30af3b5401df4d9a905784ac933e172a
+                  expression: 'min(/PIC Ubiquiti Firewall by SNMP/vlan.status[{#VLANID}],5m) = 2'
+                  name: 'VLAN {#VLANID}: Status Down'
+                  status: DISABLED
+                  priority: WARNING
+                  description: 'VLAN {#VLANID} interface has been in a down state for at least 5 minutes. This may indicate a trunk misconfiguration or upstream link failure.'
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: Interface
+                    - tag: Interface
+                      value: VLAN
+                    - tag: Symptom
+                      value: Flap/Down
+                    - tag: VLAN
+                      value: '{#VLANID}'
+          graph_prototypes:
+            - uuid: b347c7d6931d4aeeaa0b483be960082e
+              name: 'VLAN {#VLANID}: Traffic'
+              graph_items:
+                - color: 199C0D
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'vlan.bytes.in[{#VLANID}]'
+                - sortorder: '1'
+                  color: 0080FF
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'vlan.bytes.out[{#VLANID}]'
+                - sortorder: '2'
+                  drawtype: FILLED_REGION
+                  color: FF0000
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'vlan.errors.in[{#VLANID}]'
+                - sortorder: '3'
+                  drawtype: FILLED_REGION
+                  color: CC6600
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'vlan.errors.out[{#VLANID}]'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data = JSON.parse(value);
+                  data.forEach(function(item) {
+                      var match = item['{#IFDESCR}'].match(/\.(\d+)$/);
+                      item['{#VLANID}'] = match ? match[1] : item['{#IFDESCR}'];
+                  });
+                  return JSON.stringify(data);
+        - uuid: 3c05dff531814ccfab93b64f2a47b2ad
+          name: 'VPN Tunnels (L2TP Based)'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFDESCR},1.3.6.1.2.1.2.2.1.2,{#IFTYPE},1.3.6.1.2.1.2.2.1.3]'
+          key: ubiquiti.vpn.l2tp.discovery
+          delay: 1h
+          status: DISABLED
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '^l2tp[0-9]+'
+              - macro: '{#IFTYPE}'
+                value: ^131$
+          description: 'Discovers L2TP tunnel interfaces (l2tp0, l2tp1, etc.) via the IF-MIB interface table. Filters on ifDescr matching l2tp[0-9]+ and ifType 131 (tunnel). Applicable to USG and EdgeRouter series devices running EdgeOS. Disabled by default as L2TP tunnels may not be configured on all devices.'
+          item_prototypes:
+            - uuid: bf2136e8eeef42138362bd5fda9ae15a
+              name: 'VPN: {#IFDESCR} Bytes In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.10.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.l2tp.in.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VPN-Type-Type
+                  value: L2TP
+            - uuid: 145023c5f68b440ead76bdaf14d0a0eb
+              name: 'VPN: {#IFDESCR} Errors In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.l2tp.in.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: VPN-Type
+                  value: L2TP
+              trigger_prototypes:
+                - uuid: 8b225dcd13d84425b238135e68678579
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.l2tp.in.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Inbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: L2TP
+            - uuid: 0ee88475685d4ffe8e6826fcbaf9efca
+              name: 'VPN: {#IFDESCR} Bytes Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.16.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.l2tp.out.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VPN-Type
+                  value: L2TP
+            - uuid: 10336182a88547b2a6097d616611cf98
+              name: 'VPN: {#IFDESCR} Errors Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.l2tp.out.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: VPN-Type
+                  value: L2TP
+              trigger_prototypes:
+                - uuid: 04ee5ccb8973438dad1f70c546ea2321
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.l2tp.out.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Outbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: L2TP
+            - uuid: 5f35921ae674473b969be0acb8d08091
+              name: 'VPN: {#IFDESCR} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.l2tp.status[{#SNMPINDEX}]'
+              history: 30d
+              valuemap:
+                name: interface.status.valuemap
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Status
+                - tag: VPN-Type
+                  value: L2TP
+              trigger_prototypes:
+                - uuid: 1b2cd7d252204f5a89525aac0b75f368
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.l2tp.status[{#SNMPINDEX}],#5)<1'
+                  name: 'VPN: {#IFDESCR} status flapping'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: |
+                    VPN interface {#IFDESCR} has been down for at least 5 polling intervals.
+                    Check remote peer availability or authentication settings.
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Metrics
+                      value: Status
+                    - tag: Symptoms
+                      value: Flap
+                    - tag: VPN-Type
+                      value: L2TP
+          graph_prototypes:
+            - uuid: 5146f71b7c7547c1b8cbb9ddfcfa59c2
+              name: 'L2TP VPN: {#IFDESCR} Traffic'
+              graph_items:
+                - color: 00FF00
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.l2tp.in.bytes[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 0080FF
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.l2tp.out.bytes[{#SNMPINDEX}]'
+                - sortorder: '2'
+                  drawtype: FILLED_REGION
+                  color: FF0000
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.l2tp.in.errors[{#SNMPINDEX}]'
+                - sortorder: '3'
+                  drawtype: FILLED_REGION
+                  color: CC6600
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.l2tp.out.errors[{#SNMPINDEX}]'
+        - uuid: e3c4b76478444acfb72287010ca7637a
+          name: 'VPN Tunnels (OpenVPN Based)'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFDESCR},1.3.6.1.2.1.2.2.1.2,{#IFTYPE},1.3.6.1.2.1.2.2.1.3]'
+          key: ubiquiti.vpn.openvpn.discovery
+          delay: 1h
+          status: DISABLED
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '^(tun|ovpn)[0-9]+'
+              - macro: '{#IFTYPE}'
+                value: ^131$
+          description: 'Discovers OpenVPN tunnel interfaces (tun0, tun1, ovpn0, etc.) via the IF-MIB interface table. Filters on ifDescr matching (tun|ovpn)[0-9]+ and ifType 131 (tunnel). Disabled by default as OpenVPN tunnels may not be configured on all devices.'
+          item_prototypes:
+            - uuid: b921e7d93fee4d01acbc5c56d59126a4
+              name: 'VPN: {#IFDESCR} Bytes In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.10.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.openvpn.in.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VPN-Type
+                  value: OpenVPN
+            - uuid: 62d7a63787b8486e86c106a5597a9a47
+              name: 'VPN: {#IFDESCR} Errors In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.openvpn.in.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: VPN-Type
+                  value: OpenVPN
+              trigger_prototypes:
+                - uuid: f60bb47ef4c6436e962399a29ce67555
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.openvpn.in.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Inbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: OpenVPN
+            - uuid: b5c579a1d99347368566b3c48627280d
+              name: 'VPN: {#IFDESCR} Bytes Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.16.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.openvpn.out.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VPN-Type
+                  value: OpenVPN
+            - uuid: 6c2c6ac022094d9287ea33d5ab768fd7
+              name: 'VPN: {#IFDESCR} Errors Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.openvpn.out.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: VPN-Type
+                  value: OpenVPN
+              trigger_prototypes:
+                - uuid: 064ac0d820c047a9a442bfc4c78cdb09
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.openvpn.out.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Outbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: OpenVPN
+            - uuid: 84319a52c0d143adb56a54ffd2473f09
+              name: 'VPN: {#IFDESCR} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.openvpn.status[{#SNMPINDEX}]'
+              history: 30d
+              valuemap:
+                name: interface.status.valuemap
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Status
+                - tag: VPN-Type
+                  value: OpenVPN
+              trigger_prototypes:
+                - uuid: cac8bc549c7143bf8badc5697d4d403e
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.openvpn.status[{#SNMPINDEX}],#5)<1'
+                  name: 'VPN: {#IFDESCR} status flapping'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: |
+                    VPN interface {#IFDESCR} has been down for at least 5 polling intervals.
+                    Check remote peer availability or authentication settings.
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Metrics
+                      value: Status
+                    - tag: Symptoms
+                      value: Flap
+                    - tag: VPN-Type
+                      value: OpenVPN
+          graph_prototypes:
+            - uuid: 11e352aa91ab4ac9bbef10d07d7de6dc
+              name: 'OpenVPN: {#IFDESCR} Traffic'
+              graph_items:
+                - color: 00FF00
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.openvpn.in.bytes[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 0080FF
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.openvpn.out.bytes[{#SNMPINDEX}]'
+                - sortorder: '2'
+                  drawtype: FILLED_REGION
+                  color: FF0000
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.openvpn.in.errors[{#SNMPINDEX}]'
+                - sortorder: '3'
+                  drawtype: FILLED_REGION
+                  color: CC6600
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.openvpn.out.errors[{#SNMPINDEX}]'
+        - uuid: 9e0dd08a6d2b42fd859dc43924303084
+          name: 'VPN Tunnels (Policy Based)'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFDESCR},1.3.6.1.2.1.2.2.1.2,{#IFTYPE},1.3.6.1.2.1.2.2.1.3]'
+          key: ubiquiti.vpn.policy.discovery
+          delay: 1h
+          status: DISABLED
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '^ipsec[0-9]+'
+              - macro: '{#IFTYPE}'
+                value: ^131$
+          description: 'Discovers policy-based IPsec tunnel interfaces (ipsec0, ipsec1, etc.) via the IF-MIB interface table. Filters on ifDescr matching ipsec[0-9]+ and ifType 131 (tunnel). Applicable to USG series devices running EdgeOS (VyOS-based), which represent policy-based IPsec tunnels as kernel interfaces visible in the IF-MIB. Not applicable to UCG series devices running UniFi OS with StrongSwan, which does not create kernel interfaces for policy-based tunnels and does not expose IPsec tunnel state via SNMP. Disabled by default.'
+          item_prototypes:
+            - uuid: fd13cc72baec4e98a7fba56994806739
+              name: 'VPN: {#IFDESCR} Bytes In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.10.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.policy.in.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VPN-Type
+                  value: Policy
+            - uuid: e9fca91e74f44a7fa20b4b25c5032dbf
+              name: 'VPN: {#IFDESCR} Errors In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.policy.in.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: VPN-Type
+                  value: Policy
+              trigger_prototypes:
+                - uuid: 4ac306b83c034f22ae96869ed16da625
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.policy.in.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Inbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: Policy
+            - uuid: be46d038c943423ca887c9e548cfebb1
+              name: 'VPN: {#IFDESCR} Bytes Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.16.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.policy.out.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VPN-Type
+                  value: Policy
+            - uuid: 5aa3020080cf475c8c7cb64bd5601ff4
+              name: 'VPN: {#IFDESCR} Errors Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.policy.out.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: VPN-Type
+                  value: Policy
+              trigger_prototypes:
+                - uuid: 6ce2cc7664034ca4986c609bb3140972
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.policy.out.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Outbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: Policy
+            - uuid: ab41424cb16940eb943c755fb58cba2e
+              name: 'VPN: {#IFDESCR} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.policy.status[{#SNMPINDEX}]'
+              history: 30d
+              valuemap:
+                name: interface.status.valuemap
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Status
+                - tag: VPN-Type
+                  value: Policy
+              trigger_prototypes:
+                - uuid: 8ff10a90f9614ab0a73f00acd661943a
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.policy.status[{#SNMPINDEX}],#5)<1'
+                  name: 'VPN: {#IFDESCR} status flapping'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: |
+                    VPN interface {#IFDESCR} has been down for at least 5 polling intervals.
+                    Check remote peer availability or authentication settings.
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Metrics
+                      value: Status
+                    - tag: Symptoms
+                      value: Flap
+                    - tag: VPN-Type
+                      value: Policy
+          graph_prototypes:
+            - uuid: 94c4c0ebae5440bab5d6a252f4e964dc
+              name: 'Policy VPN: {#IFDESCR}) Traffic'
+              graph_items:
+                - color: 00FF00
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.policy.in.bytes[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 0080FF
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.policy.out.bytes[{#SNMPINDEX}]'
+                - sortorder: '2'
+                  drawtype: FILLED_REGION
+                  color: FF0000
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.policy.in.errors[{#SNMPINDEX}]'
+                - sortorder: '3'
+                  drawtype: FILLED_REGION
+                  color: CC6600
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.policy.out.errors[{#SNMPINDEX}]'
+        - uuid: 81074d54b3654870b40302316e86a604
+          name: 'VPN Tunnels (PPTP Based)'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFDESCR},1.3.6.1.2.1.2.2.1.2,{#IFTYPE},1.3.6.1.2.1.2.2.1.3]'
+          key: ubiquiti.vpn.pptp.discovery
+          delay: 1h
+          status: DISABLED
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '^ppp[0-9]+'
+              - macro: '{#IFTYPE}'
+                value: ^23$
+          description: 'Discovers PPTP tunnel interfaces (ppp0, ppp1, etc.) via the IF-MIB interface table. Filters on ifDescr matching ppp[0-9]+ and ifType 23 (ppp). Applicable to USG and EdgeRouter series devices. Note that PPTP is deprecated and considered cryptographically weak; its use is not recommended. Disabled by default.'
+          item_prototypes:
+            - uuid: 03b20bee891f44cebd88060bd9759fe3
+              name: 'VPN: {#IFDESCR} Bytes In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.10.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.pptp.in.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VPN-Type
+                  value: PPTP
+            - uuid: 15112c1f7e0142da9b254dbc62da8664
+              name: 'VPN: {#IFDESCR} Errors In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.pptp.in.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: VPN-Type
+                  value: PPTP
+              trigger_prototypes:
+                - uuid: d73e69cf50aa4fa48d9ced9a5d195ef3
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.pptp.in.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Inbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: PPTP
+            - uuid: f1bc27d75b2e4d78ba4df425a88d93ab
+              name: 'VPN: {#IFDESCR} Bytes Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.16.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.pptp.out.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VPN-Type
+                  value: PPTP
+            - uuid: e83c3492713d4d3c829070097974e311
+              name: 'VPN: {#IFDESCR} Errors Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.pptp.out.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: VPN-Type
+                  value: PPTP
+              trigger_prototypes:
+                - uuid: 7ec9acc6602f4540bddb3965930ef65a
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.pptp.out.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Outbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: PPTP
+            - uuid: 1316d4e50181447f8525f2dc68e5ab70
+              name: 'VPN: {#IFDESCR} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.pptp.status[{#SNMPINDEX}]'
+              history: 30d
+              valuemap:
+                name: interface.status.valuemap
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Status
+                - tag: VPN-Type
+                  value: PPTP
+              trigger_prototypes:
+                - uuid: 5f3126f2263b412d9483185dff731fc7
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.pptp.status[{#SNMPINDEX}],#5)<1'
+                  name: 'VPN: {#IFDESCR} status flapping'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: |
+                    VPN interface {#IFDESCR} has been down for at least 5 polling intervals.
+                    Check remote peer availability or authentication settings.
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Metrics
+                      value: Status
+                    - tag: Symptoms
+                      value: Flap
+                    - tag: VPN-Type
+                      value: PPTP
+          graph_prototypes:
+            - uuid: 2cec1ae7ea854c28abec2803995eff38
+              name: 'PPTP VPN: {#IFDESCR} Traffic'
+              graph_items:
+                - color: 00FF00
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.pptp.in.bytes[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 0080FF
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.pptp.out.bytes[{#SNMPINDEX}]'
+                - sortorder: '2'
+                  drawtype: FILLED_REGION
+                  color: FF0000
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.pptp.in.errors[{#SNMPINDEX}]'
+                - sortorder: '3'
+                  drawtype: FILLED_REGION
+                  color: CC6600
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.pptp.out.errors[{#SNMPINDEX}]'
+        - uuid: 2673a79b9ca8492c825afc24781465b6
+          name: 'VPN Tunnels (Route Based)'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFDESCR},1.3.6.1.2.1.2.2.1.2,{#IFTYPE},1.3.6.1.2.1.2.2.1.3]'
+          key: ubiquiti.vpn.route.discovery
+          delay: 1h
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '^vti[0-9]+'
+              - macro: '{#IFTYPE}'
+                value: ^131$
+          description: 'Discovers route-based IPsec VTI interfaces (vti0, vti1, etc.) via the IF-MIB interface table. Filters on ifDescr matching vti[0-9]+ and ifType 131 (tunnel). Route-based tunnels use Virtual Tunnel Interfaces and are distinct from policy-based IPsec tunnels. Applicable to USG, EdgeRouter, and UCG series devices where VTI interfaces are configured.'
+          item_prototypes:
+            - uuid: 4bcd4cca99c441a39e055082981ac5ca
+              name: 'VPN: {#IFDESCR} Bytes In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.10.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.route.in.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: Route
+            - uuid: 894103b63f7f49f1a34000887e75bbb6
+              name: 'VPN: {#IFDESCR} Errors In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.route.in.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: Route
+              trigger_prototypes:
+                - uuid: ef3a0879e2de44e3a43265431c2c59e3
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.route.in.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Inbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: Route
+            - uuid: 980110377ee54e0d825841bf476ed902
+              name: 'VPN: {#IFDESCR} Bytes Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.16.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.route.out.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VPN-Type
+                  value: Route
+            - uuid: 34051abf793a4f67aecda7eed37953f9
+              name: 'VPN: {#IFDESCR} Errors Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.route.out.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: Route
+              trigger_prototypes:
+                - uuid: 80a7955f6240406985dc4833290e3f7c
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.route.out.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Outbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: Route
+            - uuid: 29eac25784074c798386eb64718fea0c
+              name: 'VPN: {#IFDESCR} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.route.status[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              valuemap:
+                name: interface.status.valuemap
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Status
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: Route
+              trigger_prototypes:
+                - uuid: 0607659e5be04e0db081c097e2f817e6
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.route.status[{#SNMPINDEX}],#5)<1'
+                  name: 'VPN: {#IFDESCR} status flapping'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: |
+                    VPN interface {#IFDESCR} has been down for at least 5 polling intervals.
+                    Check remote peer availability or authentication settings.
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Metrics
+                      value: Availability
+                    - tag: Symptoms
+                      value: Flap
+                    - tag: VPN-Type
+                      value: Route
+          graph_prototypes:
+            - uuid: 4cc947e5d6e040cd8bc69083762f0748
+              name: 'Route VPN: {#IFDESCR} Traffic'
+              graph_items:
+                - color: 00FF00
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.route.in.bytes[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 0080FF
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.route.out.bytes[{#SNMPINDEX}]'
+                - sortorder: '2'
+                  drawtype: FILLED_REGION
+                  color: FF0000
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.route.in.errors[{#SNMPINDEX}]'
+                - sortorder: '3'
+                  drawtype: FILLED_REGION
+                  color: CC6600
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.route.out.errors[{#SNMPINDEX}]'
+        - uuid: 5cc132bc7c104139a8e4bed0fb89f94d
+          name: 'VPN Tunnels (Teleport Based)'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFDESCR},1.3.6.1.2.1.2.2.1.2,{#IFTYPE},1.3.6.1.2.1.2.2.1.3]'
+          key: ubiquiti.vpn.teleport.discovery
+          delay: 1h
+          status: DISABLED
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '^teleport[0-9]+'
+              - macro: '{#IFTYPE}'
+                value: ^131$
+          description: 'Discovers Ubiquiti Teleport VPN interfaces via the IF-MIB interface table. Filters on ifDescr matching teleport[0-9]+ and ifType 131 (tunnel). Teleport is a Ubiquiti-proprietary VPN feature available on UniFi OS devices. Disabled by default as Teleport tunnels may not be configured on all devices.'
+          item_prototypes:
+            - uuid: e3548b64b5494411acbe6163e3906372
+              name: 'VPN: {#IFDESCR} Bytes In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.10.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.teleport.in.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: Teleport
+            - uuid: 02465cfa9b3a486cabc42adf00797fdd
+              name: 'VPN: {#IFDESCR} Errors In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.teleport.in.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: Teleport
+              trigger_prototypes:
+                - uuid: 3f0fab98a00e47d4b8ba34402a343aed
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.teleport.in.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Inbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: Teleport
+            - uuid: 2462ac738c9741a284623b43d20bae77
+              name: 'VPN: {#IFDESCR} Bytes Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.16.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.teleport.out.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: VPN-Type
+                  value: Teleport
+            - uuid: 684ec3b5ddc4436caf15012554a0cafd
+              name: 'VPN: {#IFDESCR} Errors Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.teleport.out.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Teleport
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: Route
+              trigger_prototypes:
+                - uuid: 55906d58967d46a9aea109d84d6f1ef4
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.teleport.out.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Outbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: Teleport
+            - uuid: cb31d51a7e674ffcb855aa92b6effb55
+              name: 'VPN: {#IFDESCR} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.teleport.status[{#SNMPINDEX}]'
+              history: 30d
+              valuemap:
+                name: interface.status.valuemap
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Status
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: Teleport
+              trigger_prototypes:
+                - uuid: 0d4ede8d3ccb474d9a8e15c7d6276741
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.teleport.status[{#SNMPINDEX}],#5)<1'
+                  name: 'VPN: {#IFDESCR} status flapping'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: |
+                    VPN interface {#IFDESCR} has been down for at least 5 polling intervals.
+                    Check remote peer availability or authentication settings.
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Metrics
+                      value: Status
+                    - tag: Symptoms
+                      value: Flap
+                    - tag: VPN-Type
+                      value: Teleport
+          graph_prototypes:
+            - uuid: 9962f10068174a83ba62f63af4af4222
+              name: 'Teleport VPN: {#IFDESCR} Traffic'
+              graph_items:
+                - color: 00FF00
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.teleport.in.bytes[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 0080FF
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.teleport.out.bytes[{#SNMPINDEX}]'
+                - sortorder: '2'
+                  drawtype: FILLED_REGION
+                  color: FF0000
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.teleport.in.errors[{#SNMPINDEX}]'
+                - sortorder: '3'
+                  drawtype: FILLED_REGION
+                  color: CC6600
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.teleport.out.errors[{#SNMPINDEX}]'
+        - uuid: 29f7a46019f24becb20963be8884b823
+          name: 'VPN Tunnels (WireGuard Based)'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFDESCR},1.3.6.1.2.1.2.2.1.2,{#IFTYPE},1.3.6.1.2.1.2.2.1.3]'
+          key: ubiquiti.vpn.wireguard.discovery
+          delay: 1h
+          status: DISABLED
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '^wg[0-9]+'
+              - macro: '{#IFTYPE}'
+                value: ^131$
+          description: 'Discovers WireGuard tunnel interfaces (wg0, wg1, etc.) via the IF-MIB interface table. Filters on ifDescr matching wg[0-9]+ and ifType 131 (tunnel). Disabled by default as WireGuard tunnels may not be configured on all devices.'
+          item_prototypes:
+            - uuid: aa3876c30f854b03946b49a430784cc8
+              name: 'VPN: {#IFDESCR} Bytes In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.10.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.wireguard.in.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: WireGuard
+            - uuid: b865053b56164b5d91c05ebdbd4b66d6
+              name: 'VPN: {#IFDESCR} Errors In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.wireguard.in.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: WireGuard
+              trigger_prototypes:
+                - uuid: ce670bf77a874fd49e5cb45654edccaf
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.wireguard.in.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Inbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: WireGuard
+            - uuid: 134e369f1793460c9b4a7b8ee60745aa
+              name: 'VPN: {#IFDESCR} Bytes Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.16.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.wireguard.out.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Traffic
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: WireGuard
+            - uuid: 323003da7f374114aae2657190d256ac
+              name: 'VPN: {#IFDESCR} Errors Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.wireguard.out.errors[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Errors
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: WireGuard
+              trigger_prototypes:
+                - uuid: c705f072361d442cbb1afe672c0a5491
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.wireguard.out.errors[{#SNMPINDEX}],5m)>{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+                  name: 'VPN: {#IFDESCR} Outbound Errors High'
+                  status: DISABLED
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Symptom
+                      value: Errors
+                    - tag: VPN-Type
+                      value: WireGuard
+            - uuid: f454778fb9ba48b7bce7383bdd671176
+              name: 'VPN: {#IFDESCR} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+              key: 'ubiquiti.vpn.wireguard.status[{#SNMPINDEX}]'
+              history: 30d
+              valuemap:
+                name: interface.status.valuemap
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: VPN
+                - tag: Metrics
+                  value: Status
+                - tag: Name
+                  value: '{#IFDESCR}'
+                - tag: VPN-Type
+                  value: WireGuard
+              trigger_prototypes:
+                - uuid: 2210aff9cbd6456a9f7d9d81c6677a74
+                  expression: 'avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.vpn.wireguard.status[{#SNMPINDEX}],#5)<1'
+                  name: 'VPN: {#IFDESCR} status flapping'
+                  status: DISABLED
+                  priority: AVERAGE
+                  description: |
+                    VPN interface {#IFDESCR} has been down for at least 5 polling intervals.
+                    Check remote peer availability or authentication settings.
+                  manual_close: 'YES'
+                  tags:
+                    - tag: Component
+                      value: VPN
+                    - tag: Metrics
+                      value: Status
+                    - tag: Symptoms
+                      value: Flap
+                    - tag: VPN-Type
+                      value: WireGuard
+          graph_prototypes:
+            - uuid: 1ee2b08753994230acdd0cdaa4371488
+              name: 'WireGuard VPN: {#IFDESCR} Traffic'
+              graph_items:
+                - color: 00FF00
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.wireguard.in.bytes[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 0080FF
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.wireguard.out.bytes[{#SNMPINDEX}]'
+                - sortorder: '2'
+                  drawtype: FILLED_REGION
+                  color: FF0000
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.wireguard.in.errors[{#SNMPINDEX}]'
+                - sortorder: '3'
+                  drawtype: FILLED_REGION
+                  color: CC6600
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.vpn.wireguard.out.errors[{#SNMPINDEX}]'
+        - uuid: 3eb3b98a99964f9c9e7f6296eb34f7ab
+          name: 'Interfaces (Extended)'
+          type: SNMP_AGENT
+          snmp_oid: 'discover[{#IFDESCR},1.3.6.1.2.1.31.1.1.1.1, {#IFALIAS},1.3.6.1.2.1.31.1.1.1.18]'
+          key: ubiquiti.xint.discovery
+          delay: 1h
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '^(ifb?|br*)+'
+          description: 'Discovers bridge and IFB (Intermediate Functional Block) interfaces via the IF-MIB extended interface table (ifXTable). Filters on ifDescr matching ifb or br prefixes. These interfaces are used for traffic shaping, QoS, and inter-VLAN routing. Uses 64-bit counters (ifHCInOctets, ifHCOutOctets) where available.'
+          item_prototypes:
+            - uuid: 2c7d734acd8843ceb1affc886e9c3e94
+              name: 'XINT: {#IFDESCR} Alias'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.31.1.1.1.10.{#SNMPINDEX}'
+              key: 'ubiquiti.xint.alias[{#SNMPINDEX}]'
+              delay: 5m
+              history: 30d
+              value_type: TEXT
+              description: 'Administrative alias for interface {#IFDESCR}, typically used for tagging in dashboards.'
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: Extended
+                - tag: Metrics
+                  value: Traffic
+                - tag: Name
+                  value: '{#IFDESCR}'
+            - uuid: 254f4ebe73164251819b3ef4c9a7d8ef
+              name: 'XINT: {#IFDESCR} Errors In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+              key: 'ubiquiti.xint.extended.errors.in[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: Extended
+                - tag: Metrics
+                  value: Errors
+                - tag: Name
+                  value: '{#IFDESCR}'
+            - uuid: 8cda218438ba46948d5d25aebb1f1424
+              name: 'XINT: {#IFDESCR} Errors Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}'
+              key: 'ubiquiti.xint.extended.errors.out[{#SNMPINDEX}]'
+              delay: 2m
+              history: 30d
+              units: Bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: Extended
+                - tag: Metrics
+                  value: Errors
+                - tag: Name
+                  value: '{#IFDESCR}'
+            - uuid: 05ede8390b1342008b52ecd0e9b4698a
+              name: 'XINT: {#IFDESCR} Bytes In'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.31.1.1.1.6.{#SNMPINDEX}'
+              key: 'ubiquiti.xint.hcin.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              description: '64-bit counter of inbound traffic on xint {#IFDESCR}, in bytes per second.'
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: Extended
+                - tag: Metrics
+                  value: Traffic
+                - tag: Name
+                  value: '{#IFDESCR}'
+            - uuid: ca9bb6dd6eb84d0b8105daec569e1c22
+              name: 'XINT: {#IFDESCR} Bytes Out'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.31.1.1.1.10.{#SNMPINDEX}'
+              key: 'ubiquiti.xint.hcout.bytes[{#SNMPINDEX}]'
+              history: 30d
+              units: Bps
+              description: '64-bit counter of outbound traffic on xint {#IFDESCR}, in bytes per second.'
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - '3600'
+              tags:
+                - tag: Component
+                  value: Interface
+                - tag: Interface
+                  value: Extended
+                - tag: Metrics
+                  value: Traffic
+                - tag: Name
+                  value: '{#IFDESCR}'
+          graph_prototypes:
+            - uuid: 348f671ebfee4efa8bf000f1ba1c8438
+              name: 'XINT: {#IFDESCR} Traffic'
+              graph_items:
+                - color: 00FF00
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.xint.hcin.bytes[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 0080FF
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.xint.hcout.bytes[{#SNMPINDEX}]'
+                - sortorder: '2'
+                  drawtype: FILLED_REGION
+                  color: FF0000
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.xint.extended.errors.in[{#SNMPINDEX}]'
+                - sortorder: '3'
+                  drawtype: FILLED_REGION
+                  color: CC6600
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC Ubiquiti Firewall by SNMP'
+                    key: 'ubiquiti.xint.extended.errors.out[{#SNMPINDEX}]'
+      tags:
+        - tag: Author
+          value: 'Simon Jackson'
+        - tag: Vendor
+          value: Ubiquiti
+      macros:
+        - macro: '{$UBIQUITI_CPU_UTIL_MAX}'
+          value: '90'
+          description: 'Maximum allowed CPU usage (%) before raising warning.'
+        - macro: '{$UBIQUITI_INTERFACE_ERROR_THRESHOLD}'
+          value: '10'
+          description: 'Interface {#IFDESCR} is experiencing a high number of SEND errors. This may indicate bad cabling, duplex mismatch, or hardware issues.'
+        - macro: '{$UBIQUITI_MEMORY_USED_MAX}'
+          value: '95'
+          description: 'Threshold for raising memory usage alerts.'
+        - macro: '{$UBIQUITI_PROCESS_MAX}'
+          value: '10'
+          description: 'Fallback maximum process count if no specific override is defined.'
+        - macro: '{$UBIQUITI_PROCESS_MAX:"dnsmasq"}'
+          value: '3'
+          description: 'Maximum number of allowed "dnsmasq" DNS forwarder processes.'
+        - macro: '{$UBIQUITI_PROCESS_MAX:"sshd"}'
+          value: '5'
+          description: 'Maximum number of allowed "sshd" processes.'
+        - macro: '{$UBIQUITI_PROCESS_MAX:"strongswan"}'
+          value: '5'
+          description: 'Maximum number of allowed "strongSwan" VPN daemon processes.'
+        - macro: '{$UBIQUITI_PROCESS_MAX:"ubnt-util"}'
+          value: '2'
+          description: 'Maximum number of allowed "ubnt-util" system support processes.'
+        - macro: '{$UBIQUITI_PROCESS_MAX:"unifi-core"}'
+          value: '3'
+          description: 'Maximum number of allowed "unifi-core" controller processes.'
+        - macro: '{$UBIQUITI_PROCESS_MIN}'
+          value: '1'
+          description: 'Fallback minimum process count if no specific override is defined.'
+        - macro: '{$UBIQUITI_PROCESS_MIN:"dnsmasq"}'
+          value: '1'
+          description: 'Minimum number of expected "dnsmasq" DNS forwarder processes.'
+        - macro: '{$UBIQUITI_PROCESS_MIN:"sshd"}'
+          value: '1'
+          description: 'Minimum number of expected "sshd" (SSH daemon) processes.'
+        - macro: '{$UBIQUITI_PROCESS_MIN:"strongswan"}'
+          value: '1'
+          description: 'Minimum number of expected "strongSwan" VPN daemon processes.'
+        - macro: '{$UBIQUITI_PROCESS_MIN:"ubnt-util"}'
+          value: '1'
+          description: 'Minimum number of expected "ubnt-util" system support processes.'
+        - macro: '{$UBIQUITI_PROCESS_MIN:"unifi-core"}'
+          value: '1'
+          description: 'Minimum number of expected "unifi-core" controller processes.'
+        - macro: '{$UBIQUITI_SESSION_COUNT_MAX}'
+          value: '50000'
+          description: 'Higher than usual session-count could indicate DDOS attacks. Default=50k.'
+        - macro: '{$UBIQUITI_STORAGE_USED_MAX:"/dev/shm"}'
+          value: '95'
+          description: 'Shared memory file system. Usage typically spikes with high memory applications.'
+        - macro: '{$UBIQUITI_STORAGE_USED_MAX:"/opt/vyatta/config"}'
+          value: '80'
+          description: 'Critical system configuration storage. Should not exceed 80% usage.'
+        - macro: '{$UBIQUITI_STORAGE_USED_MAX:"/root.dev"}'
+          value: '85'
+          description: 'Root device mount. Should stay below 85% to ensure operational integrity.'
+        - macro: '{$UBIQUITI_STORAGE_USED_MAX:"/root.dev/ugw"}'
+          value: '85'
+          description: 'Submount of root device for UGW-specific operations. Monitor closely if used actively.'
+        - macro: '{$UBIQUITI_STORAGE_USED_MAX:"/run"}'
+          value: '95'
+          description: 'Temporary runtime data. May fluctuate, but sustained high usage can indicate issues.'
+        - macro: '{$UBIQUITI_STORAGE_USED_MAX:"/tmp"}'
+          value: '90'
+          description: 'Maximum allowed storage usage on /tmp mount point. Typically more flexible, but still worth monitoring.'
+        - macro: '{$UBIQUITI_STORAGE_USED_MAX:"/var/log"}'
+          value: '85'
+          description: 'Maximum allowed storage usage on /var/log mount point before raising a warning.'
+        - macro: '{$UBIQUITI_UPTIME_MIN}'
+          value: '600'
+          description: 'Minimum expected uptime in seconds before raising alert for recent reboot (default 600 = 10 minutes).'
+        - macro: '{$UBIQUITI_VLAN_ERROR_THRESHOLD}'
+          value: '10'
+          description: 'Trigger threshold for interface error rates in errors per second. Applies to VLAN interfaces only.'
+        - macro: '{$UBIQUITI_VPN_ERRORS_THRESHOLD}'
+          value: '10'
+          description: 'Trigger threshold for the number of errors (in or out) per second on ANY VPN interface.'
+      dashboards:
+        - uuid: 5917a1ef840e4101bd2ef1130da61ffd
+          name: 'Ubiquiti Firewall'
+          pages:
+            - name: Overview
+              widgets:
+                - type: problemsbysv
+                  width: '31'
+                  fields:
+                    - type: STRING
+                      name: reference
+                      value: AUBWZ
+                - type: honeycomb
+                  name: 'Important Info'
+                  'y': '2'
+                  width: '22'
+                  height: '4'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'Device Contact'
+                    - type: STRING
+                      name: items.1
+                      value: 'Device Location'
+                    - type: STRING
+                      name: items.2
+                      value: 'Device Name'
+                    - type: STRING
+                      name: items.3
+                      value: 'Device Uptime'
+                    - type: STRING
+                      name: primary_label
+                      value: '{ITEM.NAME}'
+                    - type: STRING
+                      name: reference
+                      value: DRJLE
+                - type: item
+                  name: Uptime
+                  x: '22'
+                  'y': '2'
+                  width: '9'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'PIC Ubiquiti Firewall by SNMP'
+                        key: system.uptime
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: STRING
+                      name: value_color
+                      value: '666699'
+                - type: gauge
+                  x: '22'
+                  'y': '4'
+                  width: '9'
+                  fields:
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'PIC Ubiquiti Firewall by SNMP'
+                        key: ubiquiti.cpu.utilisation
+                    - type: STRING
+                      name: max
+                      value: '100'
+                    - type: STRING
+                      name: min
+                      value: '0'
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: show.1
+                      value: '3'
+                    - type: INTEGER
+                      name: show.2
+                      value: '5'
+                - type: svggraph
+                  name: 'Memory Usage'
+                  x: '31'
+                  width: '32'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: 80FF00
+                    - type: INTEGER
+                      name: ds.0.fill
+                      value: '1'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'Swap Available'
+                    - type: INTEGER
+                      name: ds.0.transparency
+                      value: '3'
+                    - type: STRING
+                      name: ds.1.color
+                      value: 00FFFF
+                    - type: INTEGER
+                      name: ds.1.fill
+                      value: '1'
+                    - type: STRING
+                      name: ds.1.items.0
+                      value: 'Memory Available'
+                    - type: INTEGER
+                      name: ds.1.transparency
+                      value: '3'
+                    - type: STRING
+                      name: ds.2.color
+                      value: FFBF00
+                    - type: INTEGER
+                      name: ds.2.fill
+                      value: '1'
+                    - type: STRING
+                      name: ds.2.items.0
+                      value: 'Swap Total'
+                    - type: INTEGER
+                      name: ds.2.transparency
+                      value: '3'
+                    - type: STRING
+                      name: ds.3.color
+                      value: 4000FF
+                    - type: INTEGER
+                      name: ds.3.fill
+                      value: '1'
+                    - type: STRING
+                      name: ds.3.items.0
+                      value: 'Memory Total'
+                    - type: INTEGER
+                      name: ds.3.transparency
+                      value: '3'
+                    - type: STRING
+                      name: reference
+                      value: FEWYJ
+                    - type: INTEGER
+                      name: righty
+                      value: '0'
+                - type: svggraph
+                  name: 'Disk Throughput (Unsupported by older FW Models)'
+                  x: '31'
+                  'y': '3'
+                  width: '32'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: BF00FF
+                    - type: INTEGER
+                      name: ds.0.fill
+                      value: '1'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'Disk Throughput Read'
+                    - type: INTEGER
+                      name: ds.0.transparency
+                      value: '3'
+                    - type: STRING
+                      name: ds.1.color
+                      value: 00BFFF
+                    - type: INTEGER
+                      name: ds.1.fill
+                      value: '1'
+                    - type: STRING
+                      name: ds.1.items.0
+                      value: 'Disk Throughput Write'
+                    - type: INTEGER
+                      name: ds.1.transparency
+                      value: '3'
+                    - type: STRING
+                      name: reference
+                      value: SWPAA
+                    - type: INTEGER
+                      name: righty
+                      value: '0'
+            - name: 'File System'
+              widgets:
+                - type: graphprototype
+                  width: '67'
+                  height: '13'
+                  fields:
+                    - type: INTEGER
+                      name: columns
+                      value: '3'
+                    - type: GRAPH_PROTOTYPE
+                      name: graphid.0
+                      value:
+                        host: 'PIC Ubiquiti Firewall by SNMP'
+                        name: 'Disk {#DISKDEVICE} I/O Throughput'
+                    - type: STRING
+                      name: reference
+                      value: FOSTC
+                    - type: INTEGER
+                      name: rows
+                      value: '3'
+            - name: Interfaces
+              widgets:
+                - type: honeycomb
+                  name: 'Interface Statuses'
+                  width: '27'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: '* Status'
+                    - type: INTEGER
+                      name: item_tags.0.operator
+                      value: '1'
+                    - type: STRING
+                      name: item_tags.0.tag
+                      value: Component
+                    - type: STRING
+                      name: item_tags.0.value
+                      value: Interface
+                    - type: INTEGER
+                      name: item_tags.1.operator
+                      value: '3'
+                    - type: STRING
+                      name: item_tags.1.tag
+                      value: Interface
+                    - type: STRING
+                      name: item_tags.1.value
+                      value: VLAN
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("^Interface: (.+) Status$", "\1")}'
+                    - type: INTEGER
+                      name: primary_label_bold
+                      value: '1'
+                    - type: STRING
+                      name: primary_label_color
+                      value: '666699'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '44'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: SNERQ
+                    - type: INTEGER
+                      name: secondary_label_bold
+                      value: '0'
+                    - type: STRING
+                      name: secondary_label_color
+                      value: '666699'
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+                    - type: INTEGER
+                      name: secondary_label_units_show
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FF465C
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: 81C784
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '1'
+                - type: svggraph
+                  name: 'Interface: Bytes In/Out'
+                  'y': '2'
+                  width: '27'
+                  height: '7'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: FF465C
+                    - type: INTEGER
+                      name: ds.0.fill
+                      value: '1'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'Interface: * Bytes In'
+                    - type: INTEGER
+                      name: ds.0.transparency
+                      value: '3'
+                    - type: STRING
+                      name: ds.1.color
+                      value: FFD54F
+                    - type: INTEGER
+                      name: ds.1.fill
+                      value: '1'
+                    - type: STRING
+                      name: ds.1.items.0
+                      value: 'Interface: * Bytes Out'
+                    - type: INTEGER
+                      name: ds.1.transparency
+                      value: '3'
+                    - type: INTEGER
+                      name: ds.2.axisy
+                      value: '1'
+                    - type: STRING
+                      name: ds.2.color
+                      value: 0EC9AC
+                    - type: STRING
+                      name: ds.2.items.0
+                      value: 'Interface: * Errors In'
+                    - type: INTEGER
+                      name: ds.2.transparency
+                      value: '6'
+                    - type: INTEGER
+                      name: ds.2.type
+                      value: '2'
+                    - type: INTEGER
+                      name: ds.3.axisy
+                      value: '1'
+                    - type: STRING
+                      name: ds.3.color
+                      value: 524BBC
+                    - type: STRING
+                      name: ds.3.items.0
+                      value: 'Interface: * Errors Out'
+                    - type: INTEGER
+                      name: ds.3.transparency
+                      value: '6'
+                    - type: INTEGER
+                      name: ds.3.type
+                      value: '2'
+                    - type: INTEGER
+                      name: legend_columns
+                      value: '3'
+                    - type: INTEGER
+                      name: legend_lines
+                      value: '5'
+                    - type: INTEGER
+                      name: legend_lines_mode
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: ADTYD
+                    - type: INTEGER
+                      name: simple_triggers
+                      value: '1'
+                    - type: INTEGER
+                      name: working_time
+                      value: '1'
+                - type: honeycomb
+                  name: 'VLAN Statuses'
+                  x: '27'
+                  width: '27'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: '* Status'
+                    - type: INTEGER
+                      name: item_tags.0.operator
+                      value: '1'
+                    - type: STRING
+                      name: item_tags.0.tag
+                      value: Interface
+                    - type: STRING
+                      name: item_tags.0.value
+                      value: VLAN
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("^(VLAN [0-9]+): Status$", "\1")}'
+                    - type: INTEGER
+                      name: primary_label_bold
+                      value: '1'
+                    - type: STRING
+                      name: primary_label_color
+                      value: '666699'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: RGMPO
+                    - type: INTEGER
+                      name: secondary_label_bold
+                      value: '0'
+                    - type: STRING
+                      name: secondary_label_color
+                      value: '666699'
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+                    - type: INTEGER
+                      name: secondary_label_units_show
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FF465C
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: 81C784
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '1'
+                - type: graphprototype
+                  name: 'VLAN Traffic'
+                  x: '27'
+                  'y': '2'
+                  width: '27'
+                  height: '7'
+                  fields:
+                    - type: INTEGER
+                      name: columns
+                      value: '1'
+                    - type: GRAPH_PROTOTYPE
+                      name: graphid.0
+                      value:
+                        host: 'PIC Ubiquiti Firewall by SNMP'
+                        name: 'VLAN {#VLANID}: Traffic'
+                    - type: STRING
+                      name: reference
+                      value: JTKHG
+            - name: VPNs
+              widgets:
+                - type: honeycomb
+                  name: 'VPN Statuses (All Types of Tunnels)'
+                  width: '48'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'VPN: * Status'
+                    - type: INTEGER
+                      name: item_tags.0.operator
+                      value: '1'
+                    - type: STRING
+                      name: item_tags.0.tag
+                      value: Component
+                    - type: STRING
+                      name: item_tags.0.value
+                      value: VPN
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("^VPN: (.+) Status$", "\1")}'
+                    - type: STRING
+                      name: primary_label_color
+                      value: '666699'
+                    - type: STRING
+                      name: reference
+                      value: IEAVY
+                    - type: STRING
+                      name: secondary_label_color
+                      value: '666699'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FF465C
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: A5D6A7
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '1'
+                - type: graphprototype
+                  name: 'VPN Traffic (Route Based)'
+                  'y': '2'
+                  width: '48'
+                  height: '5'
+                  fields:
+                    - type: GRAPH_PROTOTYPE
+                      name: graphid.0
+                      value:
+                        host: 'PIC Ubiquiti Firewall by SNMP'
+                        name: 'Route VPN: {#IFDESCR} Traffic'
+                    - type: STRING
+                      name: reference
+                      value: DNUDU
+                - type: graphprototype
+                  name: 'VPN Traffic (Policy Based)'
+                  'y': '7'
+                  width: '48'
+                  height: '5'
+                  fields:
+                    - type: GRAPH_PROTOTYPE
+                      name: graphid.0
+                      value:
+                        host: 'PIC Ubiquiti Firewall by SNMP'
+                        name: 'Policy VPN: {#IFDESCR}) Traffic'
+                    - type: STRING
+                      name: reference
+                      value: BMTPQ
+                - type: graphprototype
+                  name: 'VPN Traffic (Teleport)'
+                  'y': '12'
+                  width: '24'
+                  height: '5'
+                  fields:
+                    - type: INTEGER
+                      name: columns
+                      value: '1'
+                    - type: GRAPH_PROTOTYPE
+                      name: graphid.0
+                      value:
+                        host: 'PIC Ubiquiti Firewall by SNMP'
+                        name: 'Teleport VPN: {#IFDESCR} Traffic'
+                    - type: STRING
+                      name: reference
+                      value: SSTSZ
+                - type: graphprototype
+                  name: 'VPN Traffic (L2TP)'
+                  'y': '17'
+                  width: '24'
+                  height: '5'
+                  fields:
+                    - type: INTEGER
+                      name: columns
+                      value: '1'
+                    - type: GRAPH_PROTOTYPE
+                      name: graphid.0
+                      value:
+                        host: 'PIC Ubiquiti Firewall by SNMP'
+                        name: 'L2TP VPN: {#IFDESCR} Traffic'
+                    - type: STRING
+                      name: reference
+                      value: VIFUD
+                - type: graphprototype
+                  name: 'VPN Traffic (WireGuard)'
+                  x: '24'
+                  'y': '12'
+                  width: '24'
+                  height: '5'
+                  fields:
+                    - type: INTEGER
+                      name: columns
+                      value: '1'
+                    - type: GRAPH_PROTOTYPE
+                      name: graphid.0
+                      value:
+                        host: 'PIC Ubiquiti Firewall by SNMP'
+                        name: 'WireGuard VPN: {#IFDESCR} Traffic'
+                    - type: STRING
+                      name: reference
+                      value: YIVFQ
+                - type: graphprototype
+                  name: 'VPN Traffic (PPTP)'
+                  x: '24'
+                  'y': '17'
+                  width: '24'
+                  height: '5'
+                  fields:
+                    - type: INTEGER
+                      name: columns
+                      value: '1'
+                    - type: GRAPH_PROTOTYPE
+                      name: graphid.0
+                      value:
+                        host: 'PIC Ubiquiti Firewall by SNMP'
+                        name: 'PPTP VPN: {#IFDESCR} Traffic'
+                    - type: STRING
+                      name: reference
+                      value: MRKHB
+                - type: graphprototype
+                  name: 'VPN Traffic (OpenVPN)'
+                  x: '48'
+                  'y': '12'
+                  width: '24'
+                  height: '5'
+                  fields:
+                    - type: INTEGER
+                      name: columns
+                      value: '1'
+                    - type: GRAPH_PROTOTYPE
+                      name: graphid.0
+                      value:
+                        host: 'PIC Ubiquiti Firewall by SNMP'
+                        name: 'OpenVPN: {#IFDESCR} Traffic'
+                    - type: STRING
+                      name: reference
+                      value: KCCZT
+      valuemaps:
+        - uuid: bc7274ececa546e1ace82bb0ab0a3d1c
+          name: interface.status.valuemap
+          mappings:
+            - value: '1'
+              newvalue: Up
+            - value: '2'
+              newvalue: Down
+            - value: '3'
+              newvalue: Testing
+            - value: '4'
+              newvalue: Unknown
+            - value: '5'
+              newvalue: Dormant
+            - value: '6'
+              newvalue: 'Not Preent'
+            - value: '7'
+              newvalue: 'Lower Layer Down'
+        - uuid: ced0fc341f864f88a7ce5fca0438ffac
+          name: route.type.valuemap
+          mappings:
+            - value: '1'
+              newvalue: Other
+            - value: '2'
+              newvalue: Invalid
+            - value: '3'
+              newvalue: Direct
+            - value: '4'
+              newvalue: Indirect
+  triggers:
+    - uuid: e91c8a84215245798977400b1c0229ef
+      expression: |
+        nodata(/PIC Ubiquiti Firewall by SNMP/ubiquiti.memory.available,12h)=0 and
+        avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.memory.available,15m) < min(/PIC Ubiquiti Firewall by SNMP/ubiquiti.memory.available,12h) * 0.75 and
+        ((avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.memory.total,#5) - avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.memory.available,#5)) / avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.memory.total,#5)) * 100 > {$UBIQUITI_MEMORY_USED_MAX}
+      name: 'High Memory Usage'
+      status: DISABLED
+      priority: AVERAGE
+      description: 'Memory usage is unusually high relative to the past 12h baseline and exceeds the configured maximum threshold. This condition may indicate a memory leak, runaway process, or unexpected load. Suppressed if less than 12h of history exists.'
+      manual_close: 'YES'
+      tags:
+        - tag: Component
+          value: Memory
+        - tag: Metrics
+          value: Utilisation
+        - tag: Severity
+          value: Threshold
+    - uuid: 664a6c6514d747ea806688659669eb4b
+      expression: 'last(/PIC Ubiquiti Firewall by SNMP/system.uptime) > 1800 and avg(/PIC Ubiquiti Firewall by SNMP/ubiquiti.swap.available,12h) < min(/PIC Ubiquiti Firewall by SNMP/ubiquiti.swap.available,12h) * 0.8'
+      name: 'High Swap usage'
+      status: DISABLED
+      priority: AVERAGE
+      description: 'Swap usage is above {$UBIQUITI_SWAP_USED_MAX}% averaged over 5 samples.  Indicates memory pressure or prolonged resource exhaustion.'
+      manual_close: 'YES'
+      tags:
+        - tag: Component
+          value: Swap
+        - tag: Metrics
+          value: Utilisation
+        - tag: Severity
+          value: Threshold

@@ -1,0 +1,1925 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: a1b2c3d4e5f64789a1234567890abcd1
+      name: 'PIC informatique - Template'
+    - uuid: bd3b750094ff47a992de78eb656b90ea
+      name: Templates/Applications
+  templates:
+    - uuid: e9a6dc928e884bf9b27f8fa396780586
+      template: 'PIC - Urbackup'
+      name: 'PIC - Urbackup'
+      description: |
+        ## Template UrBackup — HTTP Agent pur, sans script externe
+        Collecte via l'API HTTP UrBackup :55414 entièrement depuis Zabbix.
+        L'authentification challenge-response (PBKDF2-HMAC-SHA256 ou MD5 legacy) est gérée
+        par un item SCRIPT JavaScript embarqué (Duktape ES5).
+        
+        ### Architecture
+        - Un item maître SCRIPT collecte toutes les données en une seule exécution (toutes les 5 min)
+        - Tous les autres items sont DEPENDENT et extraient leurs valeurs via JSONPath
+        - Deux règles LLD : découverte des clients serveurs/Linux + utilisation disque
+        
+        ### Supervision
+        - Statut en ligne/hors ligne de tous les clients
+        - Échecs backup fichiers (distingués serveurs/Linux vs postes de travail)
+        - Échecs backup images
+        - Âge des derniers backups (fichier + image) par client serveur/Linux
+        - Utilisation disque par client serveur/Linux
+        - Backups en cours
+        
+        ### Prérequis
+        - Zabbix 7.4+ (item SCRIPT avec timeout configurable par item)
+        - UrBackup Server 2.4+ avec API HTTP active (port 55414)
+        - Réseau : Zabbix Server/Proxy doit joindre {$URBACKUP_SERVER}:{$URBACKUP_PORT}
+        
+        ### Sécurité
+        - {$URBACKUP_PASS} déclaré en SECRET_TEXT → masqué dans l'UI Zabbix
+        - Utilisateur UrBackup dédié lecture seule recommandé
+        - Aucun fichier de credential sur le système de fichiers
+      groups:
+        - name: 'PIC informatique - Template'
+        - name: Templates/Applications
+      items:
+        - uuid: 7f5e1a5f8eaf4441928a0bc7cff92f42
+          name: 'UrBackup: Backups en cours'
+          type: DEPENDENT
+          key: urbackup.backups.running
+          history: 30d
+          trends: 90d
+          description: |
+            Nombre de jobs de sauvegarde actuellement en cours d'exécution sur le serveur UrBackup.
+            Une valeur élevée persistante peut indiquer des backups bloqués ou un serveur surchargé.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.backups_running
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: jobs
+        - uuid: abcac6c758204b39a7d4f14fa73e0caa
+          name: 'UrBackup: Clients hors ligne'
+          type: DEPENDENT
+          key: urbackup.clients.offline
+          history: 30d
+          trends: 90d
+          description: |
+            Nombre de clients UrBackup actuellement hors ligne (injoignables par le serveur).
+            Comprend tous les types de clients : serveurs, Linux, postes de travail Windows.
+            Un client hors ligne ne peut pas effectuer de backup.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.clients_offline
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: clients
+        - uuid: 7b47bce2510e4517926cb93f442d34dd
+          name: 'UrBackup: Clients en ligne'
+          type: DEPENDENT
+          key: urbackup.clients.online
+          history: 30d
+          trends: 90d
+          description: |
+            Nombre de clients UrBackup actuellement en ligne (joignables par le serveur).
+            Comprend tous les types de clients : serveurs, Linux, postes de travail Windows.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.clients_online
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: clients
+        - uuid: 22b999b0f6e14fb98444e05704a05b13
+          name: 'UrBackup: Clients configurés (total)'
+          type: DEPENDENT
+          key: urbackup.clients.total
+          history: 30d
+          trends: 90d
+          description: |
+            Nombre total de clients enregistrés dans UrBackup, quelle que soit leur disponibilité.
+            Une diminution inattendue peut indiquer la suppression accidentelle d'un client.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.clients_total
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: clients
+        - uuid: bebcd36cc8fd4728a8fa5824fdad6bc8
+          name: 'UrBackup: Données brutes (master)'
+          type: SCRIPT
+          key: urbackup.http.master
+          delay: 5m
+          history: 2h
+          value_type: TEXT
+          params: |
+            // ================================================================
+            // UrBackup Collector — Zabbix Script item
+            // Duktape ES5 / Zabbix 7.4  —  timeout : 30s
+            // Auth : PBKDF2-HMAC-SHA256 (pbkdf2_rounds > 0) ou MD5 legacy
+            // ================================================================
+            
+            // ---- MD5 pur ES5 -----------------------------------------------
+            // Implémentation complète de l'algorithme MD5 en JavaScript ES5 pur.
+            // Utilisé pour : hash du mot de passe (salt+pass) et hash final (rnd+derivedKey).
+            // Duktape (moteur JS de Zabbix) ne fournit pas de module crypto natif.
+            function md5(str) {
+              function safeAdd(x,y){var lsw=(x&0xffff)+(y&0xffff);return((x>>16)+(y>>16)+(lsw>>16))<<16|lsw&0xffff;}
+              function rol(n,c){return n<<c|n>>>32-c;}
+              function cmn(q,a,b,x,s,t){return safeAdd(rol(safeAdd(safeAdd(a,q),safeAdd(x,t)),s),b);}
+              function ff(a,b,c,d,x,s,t){return cmn(b&c|~b&d,a,b,x,s,t);}
+              function gg(a,b,c,d,x,s,t){return cmn(b&d|c&~d,a,b,x,s,t);}
+              function hh(a,b,c,d,x,s,t){return cmn(b^c^d,a,b,x,s,t);}
+              function ii(a,b,c,d,x,s,t){return cmn(c^(b|~d),a,b,x,s,t);}
+              var nb=((str.length+8)>>6)+1,bl=[],i;
+              for(i=0;i<nb*16;i++)bl[i]=0;
+              for(i=0;i<str.length;i++)bl[i>>2]|=str.charCodeAt(i)<<(i%4)*8;
+              bl[i>>2]|=0x80<<(i%4)*8; bl[nb*16-2]=str.length*8;
+              var a=1732584193,b=-271733879,c=-1732584194,d=271733878;
+              for(i=0;i<bl.length;i+=16){
+                var aa=a,bb=b,cc=c,dd=d;
+                a=ff(a,b,c,d,bl[i+0],7,-680876936);  d=ff(d,a,b,c,bl[i+1],12,-389564586);
+                c=ff(c,d,a,b,bl[i+2],17,606105819);  b=ff(b,c,d,a,bl[i+3],22,-1044525330);
+                a=ff(a,b,c,d,bl[i+4],7,-176418897);  d=ff(d,a,b,c,bl[i+5],12,1200080426);
+                c=ff(c,d,a,b,bl[i+6],17,-1473231341);b=ff(b,c,d,a,bl[i+7],22,-45705983);
+                a=ff(a,b,c,d,bl[i+8],7,1770035416);  d=ff(d,a,b,c,bl[i+9],12,-1958414417);
+                c=ff(c,d,a,b,bl[i+10],17,-42063);    b=ff(b,c,d,a,bl[i+11],22,-1990404162);
+                a=ff(a,b,c,d,bl[i+12],7,1804603682); d=ff(d,a,b,c,bl[i+13],12,-40341101);
+                c=ff(c,d,a,b,bl[i+14],17,-1502002290);b=ff(b,c,d,a,bl[i+15],22,1236535329);
+                a=gg(a,b,c,d,bl[i+1],5,-165796510);  d=gg(d,a,b,c,bl[i+6],9,-1069501632);
+                c=gg(c,d,a,b,bl[i+11],14,643717713); b=gg(b,c,d,a,bl[i+0],20,-373897302);
+                a=gg(a,b,c,d,bl[i+5],5,-701558691);  d=gg(d,a,b,c,bl[i+10],9,38016083);
+                c=gg(c,d,a,b,bl[i+15],14,-660478335);b=gg(b,c,d,a,bl[i+4],20,-405537848);
+                a=gg(a,b,c,d,bl[i+9],5,568446438);   d=gg(d,a,b,c,bl[i+14],9,-1019803690);
+                c=gg(c,d,a,b,bl[i+3],14,-187363961); b=gg(b,c,d,a,bl[i+8],20,1163531501);
+                a=gg(a,b,c,d,bl[i+13],5,-1444681467);d=gg(d,a,b,c,bl[i+2],9,-51403784);
+                c=gg(c,d,a,b,bl[i+7],14,1735328473); b=gg(b,c,d,a,bl[i+12],20,-1926607734);
+                a=hh(a,b,c,d,bl[i+5],4,-378558);     d=hh(d,a,b,c,bl[i+8],11,-2022574463);
+                c=hh(c,d,a,b,bl[i+11],16,1839030562);b=hh(b,c,d,a,bl[i+14],23,-35309556);
+                a=hh(a,b,c,d,bl[i+1],4,-1530992060); d=hh(d,a,b,c,bl[i+4],11,1272893353);
+                c=hh(c,d,a,b,bl[i+7],16,-155497632); b=hh(b,c,d,a,bl[i+10],23,-1094730640);
+                a=hh(a,b,c,d,bl[i+13],4,681279174);  d=hh(d,a,b,c,bl[i+0],11,-358537222);
+                c=hh(c,d,a,b,bl[i+3],16,-722521979); b=hh(b,c,d,a,bl[i+6],23,76029189);
+                a=hh(a,b,c,d,bl[i+9],4,-640364487);  d=hh(d,a,b,c,bl[i+12],11,-421815835);
+                c=hh(c,d,a,b,bl[i+15],16,530742520); b=hh(b,c,d,a,bl[i+2],23,-995338651);
+                a=ii(a,b,c,d,bl[i+0],6,-198630844);  d=ii(d,a,b,c,bl[i+7],10,1126891415);
+                c=ii(c,d,a,b,bl[i+14],15,-1416354905);b=ii(b,c,d,a,bl[i+5],21,-57434055);
+                a=ii(a,b,c,d,bl[i+12],6,1700485571); d=ii(d,a,b,c,bl[i+3],10,-1894986606);
+                c=ii(c,d,a,b,bl[i+10],15,-1051523);  b=ii(b,c,d,a,bl[i+1],21,-2054922799);
+                a=ii(a,b,c,d,bl[i+8],6,1873313359);  d=ii(d,a,b,c,bl[i+15],10,-30611744);
+                c=ii(c,d,a,b,bl[i+6],15,-1560198380);b=ii(b,c,d,a,bl[i+13],21,1309151649);
+                a=ii(a,b,c,d,bl[i+4],6,-145523070);  d=ii(d,a,b,c,bl[i+11],10,-1120210379);
+                c=ii(c,d,a,b,bl[i+2],15,718787259);  b=ii(b,c,d,a,bl[i+9],21,-343485551);
+                a=safeAdd(a,aa);b=safeAdd(b,bb);c=safeAdd(c,cc);d=safeAdd(d,dd);
+              }
+              function hex(n){var s='',v;for(var j=0;j<4;j++){v=(n>>j*8)&255;s+=('0'+v.toString(16)).slice(-2);}return s;}
+              return hex(a)+hex(b)+hex(c)+hex(d);
+            }
+            
+            // ---- SHA-256 sur tableau d'octets ------------------------------
+            // Implémentation SHA-256 travaillant sur des tableaux d'octets (integers 0-255).
+            // Utilisée comme primitive par HMAC-SHA256 et PBKDF2.
+            // Retourne un tableau d'octets (32 éléments).
+            function sha256b(msg) {
+              var K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+                     0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+                     0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+                     0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+                     0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+                     0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+                     0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+                     0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+              var H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+              var l=msg.length; msg=msg.slice(); msg.push(0x80);
+              while(msg.length%64!==56) msg.push(0);
+              var bl=l*8;
+              msg.push(0,0,0,0,(bl>>>24)&0xff,(bl>>>16)&0xff,(bl>>>8)&0xff,bl&0xff);
+              function rotr(x,n){return(x>>>n)|(x<<(32-n));}
+              function a32(a,b){return(a+b)>>>0;}
+              for(var bi=0;bi<msg.length;bi+=64){
+                var W=[];
+                for(var t=0;t<16;t++) W[t]=((msg[bi+t*4]<<24)|(msg[bi+t*4+1]<<16)|(msg[bi+t*4+2]<<8)|msg[bi+t*4+3])>>>0;
+                for(var t=16;t<64;t++){
+                  var s0=rotr(W[t-15],7)^rotr(W[t-15],18)^(W[t-15]>>>3);
+                  var s1=rotr(W[t-2],17)^rotr(W[t-2],19)^(W[t-2]>>>10);
+                  W[t]=a32(a32(a32(W[t-16],s0),W[t-7]),s1);
+                }
+                var a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+                for(var t=0;t<64;t++){
+                  var S1=rotr(e,6)^rotr(e,11)^rotr(e,25);
+                  var ch=(e&f)^(~e&g);
+                  var t1=a32(a32(a32(a32(h,S1),ch),K[t]),W[t]);
+                  var S0=rotr(a,2)^rotr(a,13)^rotr(a,22);
+                  var maj=(a&b)^(a&c)^(b&c);
+                  var t2=a32(S0,maj);
+                  h=g;g=f;f=e;e=a32(d,t1);d=c;c=b;b=a;a=a32(t1,t2);
+                }
+                H[0]=a32(H[0],a);H[1]=a32(H[1],b);H[2]=a32(H[2],c);H[3]=a32(H[3],d);
+                H[4]=a32(H[4],e);H[5]=a32(H[5],f);H[6]=a32(H[6],g);H[7]=a32(H[7],h);
+              }
+              var out=[];
+              for(var i=0;i<8;i++) out.push((H[i]>>>24)&0xff,(H[i]>>>16)&0xff,(H[i]>>>8)&0xff,H[i]&0xff);
+              return out;
+            }
+            
+            // ---- HMAC-SHA-256 (usage générique) ----------------------------
+            // Calcule HMAC-SHA256(key, data) — key et data sont des tableaux d'octets.
+            // Si la clé dépasse le block size (64 octets), elle est d'abord hachée.
+            // Retourne un tableau d'octets (32 éléments).
+            function hmacSha256b(key, data) {
+              var BS=64;
+              if(key.length>BS) key=sha256b(key);
+              while(key.length<BS) key.push(0);
+              var opad=[],ipad=[];
+              for(var i=0;i<BS;i++){opad.push(key[i]^0x5c);ipad.push(key[i]^0x36);}
+              return sha256b(opad.concat(sha256b(ipad.concat(data))));
+            }
+            
+            // ---- PBKDF2-HMAC-SHA-256 (optimisé) ----------------------------
+            // Dérive une clé cryptographique à partir d'un mot de passe selon RFC 2898.
+            // Paramètres :
+            //   pwd    : tableau d'octets (mot de passe pré-haché en MD5)
+            //   salt   : tableau d'octets (sel fourni par le serveur UrBackup)
+            //   iter   : nombre d'itérations (pbkdf2_rounds, typiquement 10000)
+            //   dkLen  : longueur de la clé dérivée souhaitée en octets (32 pour SHA-256)
+            // Optimisation : ipad/opad calculés une seule fois hors boucle (×2 sur les XOR de clé).
+            function pbkdf2b(pwd, salt, iter, dkLen) {
+              var BS=64;
+              var key=pwd.slice();
+              if(key.length>BS) key=sha256b(key);
+              while(key.length<BS) key.push(0);
+              var opad=new Array(BS), ipad=new Array(BS);
+              for(var p=0;p<BS;p++){opad[p]=key[p]^0x5c; ipad[p]=key[p]^0x36;}
+              // HMAC interne réutilisant les pads pré-calculés pour éviter de recalculer les XOR
+              function H(data){return sha256b(opad.concat(sha256b(ipad.concat(data))));}
+              var out=[],blk=1;
+              while(out.length<dkLen){
+                // Compteur de bloc encodé sur 4 octets big-endian (requis par RFC 2898)
+                var blkB=[(blk>>>24)&0xff,(blk>>>16)&0xff,(blk>>>8)&0xff,blk&0xff];
+                var U=H(salt.concat(blkB)); // premier bloc U1 = HMAC(pwd, salt || INT(blk))
+                var T=U.slice();
+                // Itérations suivantes : T[j] = U1 XOR U2 XOR ... XOR Ui
+                for(var i=1;i<iter;i++){U=H(U);for(var j=0;j<32;j++)T[j]^=U[j];}
+                out=out.concat(T); blk++;
+              }
+              return out.slice(0,dkLen);
+            }
+            
+            // ---- Helpers de conversion -------------------------------------
+            // strToBytes  : convertit une chaîne JS en tableau d'octets (Latin-1 / ASCII)
+            // hexToBytes  : convertit une chaîne hexadécimale en tableau d'octets
+            // bytesToHex  : convertit un tableau d'octets en chaîne hexadécimale minuscule
+            // encodeBody  : sérialise un objet en chaîne application/x-www-form-urlencoded
+            function strToBytes(s){var b=[];for(var i=0;i<s.length;i++)b.push(s.charCodeAt(i)&0xff);return b;}
+            function hexToBytes(h){var b=[];for(var i=0;i<h.length;i+=2)b.push(parseInt(h.substr(i,2),16));return b;}
+            function bytesToHex(b){var h='';for(var i=0;i<b.length;i++)h+=('0'+(b[i]&0xff).toString(16)).slice(-2);return h;}
+            function encodeBody(obj){return Object.keys(obj).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(obj[k]);}).join('&');}
+            
+            // ---- Helpers de formatage pour les listes d'échecs -----------
+            // formatDate : convertit un timestamp UNIX (secondes) en "YYYY-MM-DD HH:MM"
+            // formatAge  : convertit un nombre de secondes en "Xj Yh" ou "Zh Wmin" lisible
+            // Utilisés pour construire les listes de serveurs en échec incluses dans _summary.
+            function formatDate(unixSec) {
+              var d = new Date(unixSec * 1000);
+              return d.getFullYear() + '-' +
+                     ('0'+(d.getMonth()+1)).slice(-2) + '-' +
+                     ('0'+d.getDate()).slice(-2) + ' ' +
+                     ('0'+d.getHours()).slice(-2) + ':' +
+                     ('0'+d.getMinutes()).slice(-2);
+            }
+            function formatAge(secs) {
+              var d = Math.floor(secs / 86400);
+              var h = Math.floor((secs % 86400) / 3600);
+              var m = Math.floor((secs % 3600) / 60);
+              if (d > 0) return d + 'j ' + h + 'h';
+              if (h > 0) return h + 'h ' + m + 'min';
+              return m + 'min';
+            }
+            
+            // ---- Configuration (macros Zabbix substituées à l'exécution) --
+            // Les macros {$...} sont remplacées par leurs valeurs avant que le JS s'exécute.
+            var SERVER   = '{$URBACKUP_SERVER}';
+            var PORT     = '{$URBACKUP_PORT}';
+            var USERNAME = '{$URBACKUP_USER}';
+            var PASSWORD = '{$URBACKUP_PASS}';
+            var BASE     = 'http://' + SERVER + ':' + PORT + '/x';
+            
+            try {
+              // Un seul objet HttpRequest pour toute la session.
+              // Content-Type positionné globalement car tous les appels sont en POST form-urlencoded.
+              var req = new HttpRequest();
+              req.addHeader('User-Agent: Zabbix-UrBackup/2.0');
+              req.addHeader('Content-Type: application/x-www-form-urlencoded');
+            
+              // ---- Étape 1 : obtention du challenge (salt + session) -------
+              // POST /x?a=salt avec le nom d'utilisateur dans le body.
+              // Retourne : { ses, salt, rnd, pbkdf2_rounds }
+              //   ses          : identifiant de session temporaire (cookie-like)
+              //   salt         : sel pour le hash du mot de passe
+              //   rnd          : nonce pour le hash final (anti-replay)
+              //   pbkdf2_rounds: 0 = serveur legacy (MD5 seul), >0 = PBKDF2-HMAC-SHA256
+              var r1Raw = req.post(BASE + '?a=salt', 'username=' + encodeURIComponent(USERNAME));
+              var r1;
+              try { r1 = JSON.parse(r1Raw); }
+              catch(e) { throw 'Challenge parse error: ' + String(r1Raw).substring(0, 80); }
+            
+              var ses          = r1.ses            || '';
+              var salt         = r1.salt           || '';
+              var rnd          = r1.rnd            || '';
+              var pbkdf2Rounds = r1.pbkdf2_rounds  || 0;
+            
+              if (!ses) throw 'No ses in challenge — réponse: ' + r1Raw.substring(0, 120);
+              if (!rnd) throw 'No rnd in challenge';
+            
+              // ---- Étape 2 : calcul du hash d'authentification ------------
+              // Schéma commun aux deux modes :
+              //   md5Hex = MD5(salt + password)    ← hash intermédiaire commun
+              //
+              // Mode PBKDF2 (pbkdf2_rounds > 0, serveurs récents UrBackup 2.4+) :
+              //   derivedKey = PBKDF2-HMAC-SHA256(key=md5Hex_bytes, salt=salt_bytes, rounds, 32)
+              //   finalHash  = derivedKey_hex
+              //
+              // Mode legacy (pbkdf2_rounds = 0, anciens serveurs) :
+              //   finalHash  = md5Hex
+              //
+              // Dans les deux cas : pwHash = MD5(rnd + finalHash)
+              // C'est la valeur envoyée comme "password" lors du login.
+              var md5Hex = md5(salt + PASSWORD);
+              var finalHash;
+              if (pbkdf2Rounds > 0) {
+                // Mode PBKDF2 : dérivation de clé depuis le hash MD5 du mot de passe
+                finalHash = bytesToHex(pbkdf2b(hexToBytes(md5Hex), strToBytes(salt), pbkdf2Rounds, 32));
+              } else {
+                // Mode legacy : pas de dérivation PBKDF2
+                finalHash = md5Hex;
+              }
+              var pwHash = md5(rnd + finalHash);
+            
+              // ---- Étape 3 : login ----------------------------------------
+              // POST /x?a=login avec ses + credentials dans le body (pas en query string).
+              // Note : passer ses= en query string (?a=login&ses=X) renvoie {"error":1}
+              // depuis UrBackup 2.4.x — le body POST est obligatoire.
+              var r2Raw = req.post(BASE + '?a=login',
+                'ses='      + encodeURIComponent(ses) +
+                '&username=' + encodeURIComponent(USERNAME) +
+                '&password=' + encodeURIComponent(pwHash));
+              var r2;
+              try { r2 = JSON.parse(r2Raw); }
+              catch(e) { throw 'Login parse error: ' + r2Raw.substring(0, 80); }
+              if (!r2.success) throw 'Auth failed (HTTP ' + req.getStatus() + ') — vérifier {$URBACKUP_USER}/{$URBACKUP_PASS}';
+            
+              // ---- Étape 4 : collecte des données -------------------------
+              // Tous les appels passent ses= dans le body POST (même raison qu'à l'étape 3).
+              // Quatre endpoints collectés en une seule exécution :
+              //   status   : liste des clients avec statut en ligne, dernier backup, OS...
+              //   usage    : utilisation disque par client (fichiers + images)
+              //   lastacts : historique des dernières activités (durée, taille, erreurs, warnings)
+              //   progress : backups actuellement en cours d'exécution
+              var sesBody = 'ses=' + encodeURIComponent(ses);
+              var status   = JSON.parse(req.post(BASE + '?a=status',   sesBody));
+              var usage    = JSON.parse(req.post(BASE + '?a=usage',    sesBody));
+              var lastacts = JSON.parse(req.post(BASE + '?a=lastacts', sesBody));
+              var progress = JSON.parse(req.post(BASE + '?a=progress', sesBody));
+              if (status.error)   throw 'status API error (HTTP ' + req.getStatus() + ') — ses=' + ses;
+              if (usage.error)    throw 'usage API error — ses=' + ses;
+            
+              // ---- Étape 5 : enrichissement des données clients -----------
+              var ts       = Math.floor(Date.now() / 1000); // timestamp UNIX courant (secondes)
+              var clients  = status.status    || [];        // liste des clients (renommé en 2.4)
+              var actsList = lastacts.lastacts || [];
+              var progList = progress.progress || [];
+            
+              // Index des dernières activités par nom de client (evite O(n²) dans la boucle)
+              var actsByName = {}, progByName = {};
+              for (var i = 0; i < actsList.length; i++) {
+                var act = actsList[i];
+                if (act.name && !actsByName[act.name]) actsByName[act.name] = act;
+              }
+              // Index des backups en cours par nom de client.
+              // Stocke le pourcentage de progression (pc) et la vitesse pour détection de blocage.
+              // pc est utilisé par l'item backup_pc pour les triggers "sauvegarde bloquée".
+              for (var j = 0; j < progList.length; j++) {
+                var p = progList[j];
+                if (p.name) progByName[p.name] = {
+                  pc:         typeof p.pc         === 'number' ? p.pc         : 0,
+                  eta_ms:     typeof p.eta_ms      === 'number' ? p.eta_ms     : 0,
+                  speed_bpms: typeof p.speed_bpms  === 'number' ? p.speed_bpms : 0
+                };
+              }
+            
+              // Compteurs globaux pour le _summary + listes textuelles pour les descriptions de triggers
+              // Les échecs fichiers serveurs sont séparés selon l'état online :
+              //   cSrvFileFail        : serveurs EN LIGNE en échec  → trigger HIGH (ticket GLPI)
+              //   cSrvFileFailOffline : serveurs HORS LIGNE en échec → trigger AVERAGE (sévérité abaissée)
+              // Un serveur éteint ne peut pas être sauvegardé : l'échec est attendu, donc moins critique.
+              var cTotal=0, cOnline=0, cSrvFileFail=0, cSrvFileFailOffline=0, cWksFileFail=0, cImgFail=0;
+              var srvFailList=[], srvFailOfflineList=[], wksFailList=[], imgFailList=[];
+            
+              for (var k = 0; k < clients.length; k++) {
+                var c  = clients[k];
+                var nm = c.name || '';
+                var lf = c.lastbackup       || 0; // timestamp UNIX du dernier backup fichier
+                var li = c.lastbackup_image || 0; // timestamp UNIX du dernier backup image
+            
+                // Calcul de l'âge des backups en secondes depuis maintenant.
+                // -1 indique "jamais sauvegardé" (timestamp = 0).
+                c.last_backup_age_s = lf > 0 ? ts - lf : -1;
+                c.last_image_age_s  = li > 0 ? ts - li : -1;
+            
+                // Indique si un backup est actuellement en cours, et son pourcentage de progression.
+                // backup_pc = -1 si aucun backup en cours (valeur sentinelle pour les triggers).
+                // backup_pc = 0..100 si backup actif (issu de /x?a=progress).
+                var prog            = progByName[nm] || null;
+                c.backup_running    = prog ? 1 : 0;
+                c.backup_pc         = prog ? prog.pc : -1;
+            
+                // Récupération des métriques de la dernière activité depuis l'index
+                var a = actsByName[nm] || {};
+                c.last_status     = a.status    !== undefined ? a.status : -1; // -1=inconnu
+                c.last_errors     = a.errors    || 0;
+                c.last_warnings   = a.warnings  || 0;
+                c.last_duration_s = a.duration  || 0;   // durée en secondes
+                c.last_size_bytes = a.size_bytes || 0;  // données transférées en octets
+            
+                // ---- Détection du type de machine (serveur vs poste de travail) ----
+                // os_simple retourne "windows" ou "linux" sans distinguer Server/Workstation.
+                // os_version_string retourne la chaîne complète, ex: "Microsoft Windows Server 2019 Datacenter"
+                // On utilise donc os_version_string pour détecter les Windows Server.
+                var osSimple  = (c.os_simple         || '').toLowerCase();
+                var osVersion = (c.os_version_string || '').toLowerCase();
+                var isLinux   = osSimple  === 'linux' || osVersion.indexOf('linux')  >= 0;
+                var isWinSrv  = osVersion.indexOf('server') >= 0;
+                // is_server = 1 pour serveurs Windows (toutes éditions) et toutes distributions Linux
+                // is_server = 0 pour postes de travail Windows (10/11 Pro/Home/Professionnel)
+                c.is_server   = (isLinux || isWinSrv) ? 1 : 0;
+            
+                // Compteurs globaux — tous les clients confondus
+                cTotal++;
+                if (c.online) cOnline++;
+            
+                // Séparation des échecs fichiers selon le type de machine.
+                // Un backup est en échec si file_ok=false ET file_disabled=false.
+                // file_disabled=true signifie que les backups fichiers sont volontairement désactivés.
+                if (!c.file_ok && !c.file_disabled) {
+                  var lastFileStr = lf > 0
+                    ? formatDate(lf) + ' (il y a ' + formatAge(ts - lf) + ')'
+                    : 'jamais sauvegardé';
+                  if (c.is_server) {
+                    // Serveur en échec : on distingue en ligne (critique) et hors ligne (attendu).
+                    if (c.online) {
+                      cSrvFileFail++;
+                      srvFailList.push('  - ' + nm + ' — dernier backup : ' + lastFileStr);
+                    } else {
+                      cSrvFileFailOffline++;
+                      srvFailOfflineList.push('  - ' + nm + ' (hors ligne) — dernier backup : ' + lastFileStr);
+                    }
+                  } else {
+                    cWksFileFail++;
+                    wksFailList.push('  - ' + nm + ' — dernier backup : ' + lastFileStr);
+                  }
+                }
+                // Échecs image : comptabilisés uniquement pour les serveurs/Linux.
+                // Les postes de travail ont généralement image_disabled=true.
+                if (c.is_server && !c.image_ok && !c.image_disabled) {
+                  cImgFail++;
+                  var lastImgStr = li > 0
+                    ? formatDate(li) + ' (il y a ' + formatAge(ts - li) + ')'
+                    : 'jamais sauvegardé';
+                  imgFailList.push('  - ' + nm + ' — dernier image : ' + lastImgStr);
+                }
+              }
+            
+              // ---- Propagation de is_server vers les entrées usage --------
+              // L'endpoint /x?a=usage ne retourne pas os_version_string.
+              // On propage is_server depuis status vers usage par correspondance de nom.
+              // Utilisé par la règle LLD urbackup.disk.discovery pour filtrer serveurs/Linux.
+              var isServerByName = {};
+              for (var s = 0; s < clients.length; s++) {
+                isServerByName[clients[s].name || ''] = clients[s].is_server || 0;
+              }
+              var usageList = (usage.usage) || [];
+              for (var u = 0; u < usageList.length; u++) {
+                var uName = usageList[u].name || '';
+                usageList[u].is_server = isServerByName.hasOwnProperty(uName) ? isServerByName[uName] : 0;
+              }
+            
+              // ---- Retour du payload JSON enrichi -------------------------
+              // Structure retournée consommée par tous les items DEPENDENT via JSONPath :
+              //   _meta    : métadonnées de collecte (timestamp, serveur)
+              //   _summary : compteurs globaux extraits par les items globaux
+              //   status   : données brutes /x?a=status (avec enrichissements is_server, ages...)
+              //   usage    : données brutes /x?a=usage  (avec is_server propagé)
+              //   lastacts : données brutes /x?a=lastacts
+              //   progress : données brutes /x?a=progress
+              return JSON.stringify({
+                _meta:    { collected_at: ts, server: SERVER, port: PORT },
+                _summary: {
+                  clients_total:              cTotal,
+                  clients_online:             cOnline,
+                  clients_offline:            cTotal - cOnline,
+                  backups_running:            progList.length,
+                  server_file_failures:               cSrvFileFail,
+                  server_file_failures_offline:       cSrvFileFailOffline,
+                  workstation_file_failures:          cWksFileFail,
+                  image_backup_failures:              cImgFail,
+                  server_file_failures_list:          srvFailList.length        > 0 ? srvFailList.join('\n')        : '',
+                  server_file_failures_offline_list:  srvFailOfflineList.length > 0 ? srvFailOfflineList.join('\n') : '',
+                  workstation_file_failures_list:     wksFailList.length        > 0 ? wksFailList.join('\n')        : '',
+                  image_backup_failures_list:         imgFailList.length        > 0 ? imgFailList.join('\n')        : ''
+                },
+                status:   status,
+                usage:    usage,
+                lastacts: lastacts,
+                progress: progress
+              });
+            
+            } catch(e) {
+              throw 'UrBackup collector: ' + e;
+            }
+          description: |
+            Item maître SCRIPT — collecte toutes les données UrBackup en une seule exécution JS.
+            
+            Flux d'authentification (conforme à l'API UrBackup 2.4+) :
+              1. POST /x?a=salt  → challenge : { ses, salt, rnd, pbkdf2_rounds }
+              2. Calcul du hash :
+                   PBKDF2-HMAC-SHA256(key=MD5(salt+pass), salt, rounds, 32)  ← serveurs récents
+                   ou MD5(salt+pass)                                           ← serveurs legacy
+                 → pwHash = MD5(rnd + derivedKey)
+              3. POST /x?a=login  → { success: true }  (ses + credentials dans le body POST)
+              4. POST /x?a=status   → liste clients + statut
+                 POST /x?a=usage    → utilisation disque
+                 POST /x?a=lastacts → dernières activités
+                 POST /x?a=progress → backups en cours
+              5. Enrichissement : calcul is_server, âges des backups, index des activités
+              6. Retour du payload JSON enrichi
+            
+            Timeout 60s requis car PBKDF2 (~10 000 itérations) peut prendre jusqu'à 45s en Duktape ES5
+            selon les performances du Zabbix Server/Proxy.
+            Les items HTTP_AGENT partagent un timeout preprocessing de ~3s, insuffisant.
+          timeout: 60s
+          tags:
+            - tag: application
+              value: urbackup
+            - tag: component
+              value: raw
+          triggers:
+            - uuid: 13845bd243d6499c97dc426eb2e66966
+              expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
+              name: 'UrBackup: API indisponible sur {HOST.NAME}'
+              priority: HIGH
+              description: |
+                Aucune donnée reçue de l'API UrBackup depuis {$URBACKUP_NO_DATA_TIMEOUT}.
+                
+                Causes possibles :
+                  - Service urbackup-server arrêté sur {HOST.NAME}
+                  - Port {$URBACKUP_PORT} inaccessible (pare-feu, réseau)
+                  - Credentials incorrects (macros {$URBACKUP_USER} / {$URBACKUP_PASS})
+                  - Timeout PBKDF2 dépassé (augmenter le timeout de l'item si nécessaire)
+                
+                Actions :
+                  - Vérifier le service : systemctl status urbackupsrv
+                  - Tester l'accès : curl http://{$URBACKUP_SERVER}:{$URBACKUP_PORT}/x?a=salt
+                  - Contrôler les macros dans Zabbix (Administration → Hôtes → {HOST.NAME})
+                
+                Tous les triggers par client dépendent de ce trigger pour éviter les floods d'alertes.
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: aa35f5d358b74c53a920f9466b93e4e3
+          name: 'UrBackup: Échecs backup images (global)'
+          type: DEPENDENT
+          key: urbackup.image.backup.failures
+          history: 30d
+          trends: 90d
+          description: |
+            Nombre de serveurs/Linux dont le dernier backup image est en échec.
+            Un backup image est considéré en échec si image_ok=false ET image_disabled=false.
+            Les postes de travail sont exclus (leur backup image est généralement désactivé).
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.image_backup_failures
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: jobs
+          triggers:
+            - uuid: 307a86036b814866bf4153e08a8d0cf2
+              expression: 'last(/PIC - Urbackup/urbackup.image.backup.failures)>0'
+              name: 'UrBackup: {ITEM.LASTVALUE1} client(s) avec backup image en échec'
+              priority: AVERAGE
+              description: |
+                {ITEM.LASTVALUE1} serveur(s)/Linux ont leur dernier backup image en échec.
+                
+                Le backup image (snapshot disque complet) est critique pour la restauration bare-metal.
+                Un échec peut être dû à :
+                  - Espace disque insuffisant sur le serveur UrBackup
+                  - Client hors ligne au moment du backup planifié
+                  - Erreur VSS (Volume Shadow Copy) côté client Windows Server
+                  - Droits insuffisants de l'agent UrBackup
+                
+                Actions :
+                  - Identifier les clients en échec dans le dashboard UrBackup
+                  - Consulter les logs : /var/log/urbackup/ (serveur) ou Event Viewer (client)
+                  - Vérifier l'espace disque disponible sur le serveur UrBackup
+              tags:
+                - tag: scope
+                  value: backup-status
+        - uuid: 35897b0cd8a54a8cb7b3cc34149f404f
+          name: 'UrBackup: Liste serveurs/Linux avec backup image en échec'
+          type: DEPENDENT
+          key: urbackup.image.backup.failures.list
+          history: 7d
+          value_type: TEXT
+          description: |
+            Liste textuelle des serveurs/Linux dont le dernier backup image est en échec.
+            Format : "  - NOM_SERVEUR — dernier image : YYYY-MM-DD HH:MM (il y a Xj Yh)"
+            Chaîne vide si aucun échec.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.image_backup_failures_list
+              error_handler: CUSTOM_VALUE
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: jobs
+        - uuid: 06e9b0da34d64625b7306ce494c9bdea
+          name: 'UrBackup: Échecs backup fichiers — serveurs/Linux'
+          type: DEPENDENT
+          key: urbackup.server.file.failures
+          history: 30d
+          trends: 90d
+          description: |
+            Nombre de serveurs Windows et machines Linux dont le dernier backup fichier est en échec.
+            Séparé des postes de travail car la criticité est plus élevée pour les serveurs.
+            Un backup est en échec si file_ok=false ET file_disabled=false.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.server_file_failures
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: jobs
+            - tag: scope
+              value: backup-status
+          triggers:
+            - uuid: 86b5075cec7f4e169bdc782a4fa860c6
+              expression: 'last(/PIC - Urbackup/urbackup.server.file.failures)>0'
+              name: 'UrBackup: {ITEM.LASTVALUE1} serveur(s)/Linux avec backup fichier en échec'
+              priority: HIGH
+              description: |
+                {ITEM.LASTVALUE1} serveur(s) ou machine(s) Linux EN LIGNE ont leur dernier backup fichier en échec.
+                
+                Serveurs concernés :
+                {{?last(/{HOST.HOST}/urbackup.server.file.failures.list)}}
+                
+                Priorité HIGH car il s'agit de serveurs de production EN LIGNE — la perte de données serait critique.
+                
+                Note : seuls les serveurs EN LIGNE sont comptés ici. Si un serveur en échec est éteint
+                (hors ligne), il sort de ce compteur et bascule sur le trigger AVERAGE
+                "serveur(s)/Linux HORS LIGNE avec backup fichier en échec". Ce trigger HIGH se résout
+                alors automatiquement, ce qui ferme le ticket GLPI associé.
+                
+                Causes fréquentes :
+                  - Client hors ligne ou agent UrBackup arrêté
+                  - Répertoires sources inaccessibles (permissions, partages réseau déconnectés)
+                  - Quota disque dépassé sur le serveur UrBackup
+                  - Erreur réseau pendant le transfert
+                
+                Actions immédiates :
+                  - Identifier les serveurs en échec dans l'interface UrBackup
+                  - Vérifier que l'agent UrBackup est démarré sur le serveur concerné
+                  - Consulter les logs UrBackup pour le détail de l'erreur
+                  - Lancer manuellement un backup depuis l'interface UrBackup
+              tags:
+                - tag: component
+                  value: jobs
+                - tag: glpi_message
+                  value: detailed
+                - tag: scope
+                  value: backup-status
+        - uuid: 61f6e6c69ecf4be097ecf45f9c43182f
+          name: 'UrBackup: Liste serveurs/Linux avec backup fichier en échec'
+          type: DEPENDENT
+          key: urbackup.server.file.failures.list
+          history: 7d
+          value_type: TEXT
+          description: |
+            Liste textuelle des serveurs/Linux dont le dernier backup fichier est en échec.
+            Format : "  - NOM_SERVEUR — dernier backup : YYYY-MM-DD HH:MM (il y a Xj Yh)"
+            Chaîne vide si aucun échec.
+            Référencée dans la description du trigger via {{?last(...)}}.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.server_file_failures_list
+              error_handler: CUSTOM_VALUE
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: jobs
+        - uuid: ed112ca38f39498d8bb4a53fe4d1bc2f
+          name: 'UrBackup: Échecs backup fichiers — serveurs/Linux hors ligne'
+          type: DEPENDENT
+          key: urbackup.server.file.failures.offline
+          history: 30d
+          trends: 90d
+          description: |
+            Nombre de serveurs Windows et machines Linux HORS LIGNE dont le dernier backup fichier est en échec.
+            Séparé du compteur principal (serveurs en ligne) car un serveur éteint ne peut pas être
+            sauvegardé : l'échec est attendu et la criticité est donc moindre (AVERAGE au lieu de HIGH).
+            Un backup est en échec si file_ok=false ET file_disabled=false.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.server_file_failures_offline
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: jobs
+            - tag: scope
+              value: backup-status
+          triggers:
+            - uuid: 0e94efb0ad09429fa1688d2177c07ebf
+              expression: 'last(/PIC - Urbackup/urbackup.server.file.failures.offline)>0'
+              name: 'UrBackup: {ITEM.LASTVALUE1} serveur(s)/Linux HORS LIGNE avec backup fichier en échec'
+              priority: AVERAGE
+              description: |
+                {ITEM.LASTVALUE1} serveur(s) ou machine(s) Linux HORS LIGNE ont leur dernier backup fichier en échec.
+                
+                Serveurs concernés :
+                {{?last(/{HOST.HOST}/urbackup.server.file.failures.offline.list)}}
+                
+                Sévérité AVERAGE (et non HIGH) : ces serveurs sont actuellement éteints / injoignables,
+                ils ne peuvent donc pas être sauvegardés. La situation est attendue tant que la machine
+                reste hors ligne. Lorsqu'un serveur en échec passe hors ligne, il bascule du compteur
+                HIGH "serveurs en ligne" vers ce compteur AVERAGE : le trigger HIGH se résout et le
+                ticket GLPI associé est fermé.
+                
+                Actions :
+                  - Confirmer que l'arrêt du/des serveur(s) est volontaire (maintenance, mise hors service)
+                  - Si le serveur doit rester en service : le rallumer pour reprendre les backups
+                  - Si le serveur est décommissionné : supprimer le client dans UrBackup
+              tags:
+                - tag: component
+                  value: jobs
+                - tag: scope
+                  value: backup-status
+        - uuid: 80757add21f24d03a1affc46afa65682
+          name: 'UrBackup: Liste serveurs/Linux hors ligne avec backup fichier en échec'
+          type: DEPENDENT
+          key: urbackup.server.file.failures.offline.list
+          history: 7d
+          value_type: TEXT
+          description: |
+            Liste textuelle des serveurs/Linux HORS LIGNE dont le dernier backup fichier est en échec.
+            Format : "  - NOM_SERVEUR (hors ligne) — dernier backup : YYYY-MM-DD HH:MM (il y a Xj Yh)"
+            Chaîne vide si aucun échec.
+            Référencée dans la description du trigger AVERAGE via {{?last(...)}}.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.server_file_failures_offline_list
+              error_handler: CUSTOM_VALUE
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: jobs
+        - uuid: b329078957e344a2928910b8f792947a
+          name: 'UrBackup: Échecs backup fichiers — postes de travail'
+          type: DEPENDENT
+          key: urbackup.workstation.file.failures
+          history: 30d
+          trends: 90d
+          description: |
+            Nombre de postes de travail Windows dont le dernier backup fichier est en échec.
+            Séparé des serveurs car la criticité est moindre (priorité AVERAGE vs HIGH).
+            Un backup est en échec si file_ok=false ET file_disabled=false.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.workstation_file_failures
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: jobs
+            - tag: scope
+              value: backup-status
+          triggers:
+            - uuid: 91466017186048868875acbbf96505a3
+              expression: 'last(/PIC - Urbackup/urbackup.workstation.file.failures)>0'
+              name: 'UrBackup: {ITEM.LASTVALUE1} poste(s) de travail avec backup fichier en échec'
+              priority: AVERAGE
+              description: |
+                {ITEM.LASTVALUE1} poste(s) de travail Windows ont leur dernier backup fichier en échec.
+                
+                Causes fréquentes :
+                  - Poste éteint ou en veille prolongée au moment du backup planifié
+                  - Agent UrBackup arrêté ou non installé
+                  - Profil utilisateur verrouillé empêchant l'accès aux fichiers
+                
+                Actions :
+                  - Vérifier que le poste est allumé et l'agent UrBackup actif
+                  - Consulter l'interface UrBackup pour le détail de l'erreur par poste
+                  - Planifier les backups aux heures où les postes sont allumés
+              tags:
+                - tag: component
+                  value: jobs
+                - tag: scope
+                  value: backup-status
+        - uuid: 7ebe151ed6e44c7d9a4b97b3249805b4
+          name: 'UrBackup: Liste postes de travail avec backup fichier en échec'
+          type: DEPENDENT
+          key: urbackup.workstation.file.failures.list
+          history: 7d
+          value_type: TEXT
+          description: |
+            Liste textuelle des postes de travail dont le dernier backup fichier est en échec.
+            Format : "  - NOM_POSTE — dernier backup : YYYY-MM-DD HH:MM (il y a Xj Yh)"
+            Chaîne vide si aucun échec.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $._summary.workstation_file_failures_list
+              error_handler: CUSTOM_VALUE
+          master_item:
+            key: urbackup.http.master
+          tags:
+            - tag: component
+              value: jobs
+      discovery_rules:
+        - uuid: 9227bca5c5384043becc8d7727fc024e
+          name: 'UrBackup: Découverte des clients'
+          type: DEPENDENT
+          key: urbackup.clients.discovery
+          filter:
+            evaltype: OR
+            conditions:
+              - macro: '{#CLIENT_NAME}'
+                value: '{$URBACKUP_SERVER_NAMES}'
+              - macro: '{#IS_SERVER}'
+                value: ^1$
+          lifetime: 3d
+          description: |
+            Règle LLD découvrant les clients à superviser individuellement.
+            
+            Filtre (OR) : seuls sont découverts les clients dont :
+              - {#IS_SERVER} = 1 : détectés comme serveur Windows ou Linux (via os_version_string)
+              - {#CLIENT_NAME} correspond à {$URBACKUP_SERVER_NAMES} : inclusion manuelle par regex
+                (fallback pour les vieux clients qui ne remontent pas os_version_string)
+            
+            Les postes de travail Windows (Win10/11 Pro/Home) sont exclus pour limiter le bruit.
+            Macros LLD disponibles : {#CLIENT_NAME}, {#CLIENT_ID}, {#CLIENT_IP},
+                                     {#IS_SERVER}, {#OS_SIMPLE}, {#OS_VERSION},
+                                     {#FILE_DISABLED}, {#IMAGE_DISABLED}
+          item_prototypes:
+            - uuid: 689c40430cb24b4c80fd12f6ad60a25f
+              name: 'UrBackup: [{#CLIENT_NAME}] Progression backup en cours'
+              type: DEPENDENT
+              key: 'urbackup.client.backup_pc[{#CLIENT_NAME}]'
+              history: 10d
+              value_type: FLOAT
+              trends: 90d
+              units: '%'
+              description: |
+                Pourcentage de progression du backup actuellement en cours pour {#CLIENT_NAME}.
+                -1 = aucun backup en cours (valeur sentinelle — item en veille).
+                0..100 = progression du backup actif (issu de /x?a=progress).
+                
+                Utilisé par les triggers "sauvegarde bloquée" :
+                  si min(backup_pc, {$URBACKUP_STUCK_FREEZE}h) = max(backup_pc, {$URBACKUP_STUCK_FREEZE}h)
+                  → progression figée pendant {$URBACKUP_STUCK_FREEZE}h → alerte déclenchée.
+                
+                Pas de preprocessing DISCARD_UNCHANGED : chaque valeur est stockée toutes les 5 min
+                pour que le calcul min/max sur {$URBACKUP_STUCK_FREEZE}h soit exact.
+                La condition "> 0" dans les triggers exclut la valeur sentinelle -1 et les backups
+                en phase de démarrage (0% avant transfert effectif).
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].backup_pc.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '-1'
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: jobs
+            - uuid: 402ecda38761475893bbe7ed36a1180f
+              name: 'UrBackup: [{#CLIENT_NAME}] Erreurs dernier backup'
+              type: DEPENDENT
+              key: 'urbackup.client.errors[{#CLIENT_NAME}]'
+              history: 30d
+              trends: 90d
+              description: |
+                Nombre d'erreurs enregistrées lors du dernier backup de {#CLIENT_NAME}.
+                Une valeur > 0 déclenche un trigger WARNING.
+                Les erreurs sont des anomalies non bloquantes : fichiers verrouillés, permissions
+                insuffisantes sur certains répertoires, etc.
+                Consulter les logs UrBackup du client pour le détail.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_errors.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: jobs
+              trigger_prototypes:
+                - uuid: 4e2b0da914234461bc475682f3a5ef8b
+                  expression: 'last(/PIC - Urbackup/urbackup.client.errors[{#CLIENT_NAME}])>0'
+                  name: 'UrBackup: [{#CLIENT_NAME}] {ITEM.LASTVALUE1} erreur(s) dans le dernier backup'
+                  priority: WARNING
+                  description: |
+                    Le dernier backup de {#CLIENT_NAME} a généré {ITEM.LASTVALUE1} erreur(s).
+                    
+                    Les erreurs n'ont pas empêché le backup de se terminer (sinon file_ok=false)
+                    mais signalent des fichiers ou répertoires non sauvegardés.
+                    
+                    Causes fréquentes :
+                      - Fichiers verrouillés par une application au moment du backup
+                      - Permissions insuffisantes sur certains répertoires
+                      - Fichiers supprimés pendant le transfert
+                    
+                    Actions :
+                      - Consulter les logs détaillés dans l'interface UrBackup (client → dernière activité)
+                      - Identifier les fichiers concernés et ajuster les exclusions ou permissions
+                  dependencies:
+                    - name: 'UrBackup: API indisponible sur {HOST.NAME}'
+                      expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
+                  tags:
+                    - tag: client
+                      value: '{#CLIENT_NAME}'
+                    - tag: scope
+                      value: backup-errors
+            - uuid: f526f6678979474f9ee9a6810f84b1f4
+              name: 'UrBackup: [{#CLIENT_NAME}] Backup fichiers OK'
+              type: DEPENDENT
+              key: 'urbackup.client.file_ok[{#CLIENT_NAME}]'
+              history: 30d
+              trends: 90d
+              description: |
+                Statut du dernier backup fichier pour {#CLIENT_NAME}.
+                1 = dernier backup fichier réussi.
+                0 = dernier backup fichier en échec (trigger AVERAGE déclenché).
+                Non évalué si file_disabled=true (backups fichiers désactivés pour ce client).
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].file_ok.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+                - type: BOOL_TO_DECIMAL
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: backup-status
+            - uuid: 31161ddd70a142669b01cbede1b5bdc2
+              name: 'UrBackup: [{#CLIENT_NAME}] Backup image OK'
+              type: DEPENDENT
+              key: 'urbackup.client.image_ok[{#CLIENT_NAME}]'
+              history: 30d
+              trends: 90d
+              description: |
+                Statut du dernier backup image pour {#CLIENT_NAME}.
+                1 = dernier backup image réussi.
+                0 = dernier backup image en échec (trigger AVERAGE déclenché).
+                Non évalué si image_disabled=true (backups image désactivés pour ce client).
+                Le backup image est un snapshot complet du disque — critique pour restauration bare-metal.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].image_ok.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+                - type: BOOL_TO_DECIMAL
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: backup-status
+            - uuid: 338cf41e729f4fa6a039976c1f8ee689
+              name: 'UrBackup: [{#CLIENT_NAME}] Âge dernier backup fichier'
+              type: DEPENDENT
+              key: 'urbackup.client.last_backup_age[{#CLIENT_NAME}]'
+              history: 30d
+              value_type: FLOAT
+              trends: 90d
+              units: s
+              description: |
+                Temps écoulé en secondes depuis le dernier backup fichier réussi de {#CLIENT_NAME}.
+                -1 = aucun backup fichier n'a jamais été effectué pour ce client.
+                Utilisé par les triggers d'âge (WARNING à {$URBACKUP_BACKUP_AGE_WARN}s, HIGH à {$URBACKUP_BACKUP_AGE_HIGH}s).
+                La condition ">0" dans les triggers exclut la valeur sentinelle -1.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_backup_age_s.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '-1'
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: backup-age
+            - uuid: cdfb6ca11607431395832ac95fd4b825
+              name: 'UrBackup: [{#CLIENT_NAME}] Durée dernier backup'
+              type: DEPENDENT
+              key: 'urbackup.client.last_duration[{#CLIENT_NAME}]'
+              history: 30d
+              trends: 90d
+              units: s
+              description: |
+                Durée en secondes du dernier backup (fichiers ou images) de {#CLIENT_NAME}.
+                Une augmentation significative et persistante peut indiquer :
+                  - Croissance du volume de données à sauvegarder
+                  - Dégradation des performances réseau entre le client et le serveur
+                  - Charge excessive sur le serveur UrBackup
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_duration_s.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: performance
+            - uuid: ffc911b75df14a59aa56dd8bb76c07ec
+              name: 'UrBackup: [{#CLIENT_NAME}] Âge dernier backup image'
+              type: DEPENDENT
+              key: 'urbackup.client.last_image_age[{#CLIENT_NAME}]'
+              history: 30d
+              value_type: FLOAT
+              trends: 90d
+              units: s
+              description: |
+                Temps écoulé en secondes depuis le dernier backup image réussi de {#CLIENT_NAME}.
+                -1 = aucun backup image n'a jamais été effectué pour ce client.
+                Utilisé par les triggers d'âge (WARNING à {$URBACKUP_IMAGE_AGE_WARN}s, HIGH à {$URBACKUP_IMAGE_AGE_HIGH}s).
+                La condition ">0" dans les triggers exclut la valeur sentinelle -1.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_image_age_s.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '-1'
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: backup-age
+            - uuid: 41c8427af15c4e3da1fd3592dfa8e470
+              name: 'UrBackup: [{#CLIENT_NAME}] Taille dernier backup'
+              type: DEPENDENT
+              key: 'urbackup.client.last_size[{#CLIENT_NAME}]'
+              history: 30d
+              trends: 90d
+              units: B
+              description: |
+                Volume de données transférées lors du dernier backup de {#CLIENT_NAME} (en octets).
+                Inclut les backups fichiers et images.
+                Une valeur anormalement faible peut indiquer un backup partiel ou incomplet.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_size_bytes.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: performance
+            - uuid: 3626d85ebbe44d97941c9017b4a2928a
+              name: 'UrBackup: [{#CLIENT_NAME}] Statut dernier backup'
+              type: DEPENDENT
+              key: 'urbackup.client.last_status[{#CLIENT_NAME}]'
+              history: 30d
+              value_type: FLOAT
+              trends: 90d
+              description: |
+                Code de statut du dernier backup de {#CLIENT_NAME} (issu de lastacts).
+                  -1 = inconnu (aucune activité enregistrée)
+                   0 = aucun backup effectué
+                   1 = succès complet
+                   2 = succès partiel (certains fichiers non sauvegardés, voir erreurs/warnings)
+                   3 = échec (backup interrompu ou non démarré)
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_status.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '-1'
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: backup-status
+            - uuid: 01c9cf75ee924c89a02a5a7633cbcf42
+              name: 'UrBackup: [{#CLIENT_NAME}] En ligne'
+              type: DEPENDENT
+              key: 'urbackup.client.online[{#CLIENT_NAME}]'
+              history: 30d
+              trends: 90d
+              description: |
+                Disponibilité réseau du client {#CLIENT_NAME} vue depuis le serveur UrBackup.
+                1 = client joignable (agent UrBackup connecté au serveur).
+                0 = client hors ligne (trigger WARNING déclenché).
+                Un client hors ligne ne peut pas effectuer de backup planifié.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].online.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+                - type: BOOL_TO_DECIMAL
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: availability
+              trigger_prototypes:
+                - uuid: 7925992982c34cd49f443c77c44bd437
+                  expression: 'last(/PIC - Urbackup/urbackup.client.online[{#CLIENT_NAME}])=0'
+                  name: 'UrBackup: Client [{#CLIENT_NAME}] hors ligne ({#CLIENT_IP})'
+                  priority: WARNING
+                  description: |
+                    Le client {#CLIENT_NAME} (IP: {#CLIENT_IP}) est hors ligne.
+                    L'agent UrBackup n'est plus connecté au serveur — aucun backup ne peut s'effectuer.
+                    
+                    Causes possibles :
+                      - Machine éteinte ou en veille
+                      - Service UrBackup Client arrêté sur le poste
+                      - Problème réseau (VLAN, pare-feu, changement d'adresse IP)
+                      - Machine renommée ou supprimée (le client obsolète reste listé dans UrBackup)
+                    
+                    Actions :
+                      - Vérifier que la machine est accessible (ping {#CLIENT_IP})
+                      - Vérifier le service : services.msc → UrBackup Client (Windows)
+                        ou systemctl status urbackupclientbackend (Linux)
+                      - Si la machine n'existe plus, supprimer le client dans UrBackup
+                  dependencies:
+                    - name: 'UrBackup: API indisponible sur {HOST.NAME}'
+                      expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
+                  tags:
+                    - tag: client
+                      value: '{#CLIENT_NAME}'
+                    - tag: scope
+                      value: availability
+            - uuid: b9ce4146797742ea96e4163aa2a2e53d
+              name: 'UrBackup: [{#CLIENT_NAME}] Backup en cours'
+              type: DEPENDENT
+              key: 'urbackup.client.running[{#CLIENT_NAME}]'
+              history: 7d
+              trends: '0'
+              description: |
+                Indique si un backup est actuellement en cours d'exécution pour {#CLIENT_NAME}.
+                1 = backup en cours (fichiers ou image).
+                0 = aucun backup actif.
+                Utilisé dans les triggers d'âge pour éviter les faux positifs : un backup
+                en cours ne déclenche pas d'alerte même si l'âge du dernier backup dépasse le seuil.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].backup_running.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+                - type: BOOL_TO_DECIMAL
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: jobs
+            - uuid: 1265f5b75eca41d783047ea39c28f150
+              name: 'UrBackup: [{#CLIENT_NAME}] Warnings dernier backup'
+              type: DEPENDENT
+              key: 'urbackup.client.warnings[{#CLIENT_NAME}]'
+              history: 30d
+              trends: 90d
+              description: |
+                Nombre d'avertissements enregistrés lors du dernier backup de {#CLIENT_NAME}.
+                Les warnings sont moins critiques que les erreurs mais méritent attention.
+                Exemples : fichiers modifiés pendant le backup, liens symboliques non suivis.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_warnings.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: jobs
+          trigger_prototypes:
+            - uuid: 390113ce33c04804831ab3fd2ddfcc7f
+              expression: |
+                last(/PIC - Urbackup/urbackup.client.last_backup_age[{#CLIENT_NAME}])>{$URBACKUP_BACKUP_AGE_HIGH}
+                and last(/PIC - Urbackup/urbackup.client.last_backup_age[{#CLIENT_NAME}])>0
+                and last(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}])=0
+                and last(/PIC - Urbackup/urbackup.client.file_ok[{#CLIENT_NAME}])=1
+                and last(/PIC - Urbackup/urbackup.client.online[{#CLIENT_NAME}])=1
+                and "{#FILE_DISABLED}"<>"true"
+              name: 'UrBackup: [{#CLIENT_NAME}] Pas de backup fichier depuis >{$URBACKUP_BACKUP_AGE_HIGH_LABEL}'
+              priority: HIGH
+              description: |
+                Aucun backup fichier depuis plus de {$URBACKUP_BACKUP_AGE_HIGH_LABEL} pour {#CLIENT_NAME} (IP: {#CLIENT_IP}).
+                Aucun backup en cours et le client est EN LIGNE — la situation est anormale et critique.
+                Si la machine est éteinte/hors ligne, l'alerte bascule en AVERAGE (trigger "(client hors ligne)"),
+                ce qui résout cette alerte HIGH et ferme le ticket GLPI associé.
+                
+                Seuil HIGH = {$URBACKUP_BACKUP_AGE_HIGH} secondes ({$URBACKUP_BACKUP_AGE_HIGH_LABEL}).
+                
+                Actions urgentes :
+                  - Vérifier que le client est en ligne (voir trigger "hors ligne")
+                  - Vérifier le service UrBackup Client sur {#CLIENT_NAME}
+                  - Consulter les logs UrBackup pour identifier la cause de l'interruption
+                  - Lancer manuellement un backup depuis l'interface UrBackup
+                  - Vérifier qu'aucune exclusion de planification n'est active sur ce client
+              dependencies:
+                - name: 'UrBackup: API indisponible sur {HOST.NAME}'
+                  expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: scope
+                  value: backup-age
+            - uuid: a1f3c0d2e4b54a6789ab01cd23ef4501
+              expression: |
+                last(/PIC - Urbackup/urbackup.client.last_backup_age[{#CLIENT_NAME}])>{$URBACKUP_BACKUP_AGE_HIGH}
+                and last(/PIC - Urbackup/urbackup.client.last_backup_age[{#CLIENT_NAME}])>0
+                and last(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}])=0
+                and last(/PIC - Urbackup/urbackup.client.file_ok[{#CLIENT_NAME}])=1
+                and last(/PIC - Urbackup/urbackup.client.online[{#CLIENT_NAME}])=0
+                and "{#FILE_DISABLED}"<>"true"
+              name: 'UrBackup: [{#CLIENT_NAME}] Pas de backup fichier depuis >{$URBACKUP_BACKUP_AGE_HIGH_LABEL} (client hors ligne)'
+              priority: AVERAGE
+              description: |
+                Aucun backup fichier depuis plus de {$URBACKUP_BACKUP_AGE_HIGH_LABEL} pour {#CLIENT_NAME} (IP: {#CLIENT_IP}),
+                ET le client est actuellement HORS LIGNE (machine éteinte ou injoignable).
+                
+                Sévérité abaissée à AVERAGE (vs HIGH lorsque le client est en ligne) :
+                une machine éteinte ne peut pas être sauvegardée, la situation est donc attendue
+                tant qu'elle reste hors ligne.
+                
+                Basculement HIGH → AVERAGE : lorsque le serveur passe hors ligne, le trigger HIGH
+                "Pas de backup fichier depuis >{$URBACKUP_BACKUP_AGE_HIGH_LABEL}" se résout
+                (condition online=1 devenue fausse), ce qui ferme le ticket GLPI HIGH associé.
+                Ce trigger AVERAGE prend alors le relais (online=0) en moindre priorité.
+                
+                Actions :
+                  - Confirmer que l'arrêt du client est volontaire (maintenance, mise hors service)
+                  - Si la machine doit rester en service : la rallumer pour reprendre les backups
+                  - Si la machine est décommissionnée : supprimer le client dans UrBackup
+              dependencies:
+                - name: 'UrBackup: API indisponible sur {HOST.NAME}'
+                  expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: scope
+                  value: backup-age
+            - uuid: b49727d835bb4bb0888edc402809a61d
+              expression: |
+                last(/PIC - Urbackup/urbackup.client.last_backup_age[{#CLIENT_NAME}])>{$URBACKUP_BACKUP_AGE_WARN}
+                and last(/PIC - Urbackup/urbackup.client.last_backup_age[{#CLIENT_NAME}])<{$URBACKUP_BACKUP_AGE_HIGH}
+                and last(/PIC - Urbackup/urbackup.client.last_backup_age[{#CLIENT_NAME}])>0
+                and last(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}])=0
+                and last(/PIC - Urbackup/urbackup.client.file_ok[{#CLIENT_NAME}])=1
+                and "{#FILE_DISABLED}"<>"true"
+              name: 'UrBackup: [{#CLIENT_NAME}] Pas de backup fichier depuis >{$URBACKUP_BACKUP_AGE_WARN_LABEL}'
+              priority: WARNING
+              description: |
+                Aucun backup fichier depuis plus de {$URBACKUP_BACKUP_AGE_WARN_LABEL} pour {#CLIENT_NAME} (IP: {#CLIENT_IP}).
+                Aucun backup en cours — le client n'a pas été sauvegardé dans les délais normaux.
+                
+                Seuil WARNING = {$URBACKUP_BACKUP_AGE_WARN} secondes ({$URBACKUP_BACKUP_AGE_WARN_LABEL}).
+                Si la situation persiste, le trigger HIGH se déclenchera à {$URBACKUP_BACKUP_AGE_HIGH_LABEL}.
+                
+                Actions :
+                  - Vérifier que le client est en ligne
+                  - Contrôler la planification des backups dans UrBackup
+                  - Vérifier les logs pour un éventuel échec silencieux
+              dependencies:
+                - name: 'UrBackup: API indisponible sur {HOST.NAME}'
+                  expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: scope
+                  value: backup-age
+            - uuid: 61ee7c657b60479d8793c56989fd7901
+              expression: |
+                last(/PIC - Urbackup/urbackup.client.last_image_age[{#CLIENT_NAME}])>{$URBACKUP_IMAGE_AGE_HIGH}
+                and last(/PIC - Urbackup/urbackup.client.last_image_age[{#CLIENT_NAME}])>0
+                and last(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}])=0
+                and last(/PIC - Urbackup/urbackup.client.image_ok[{#CLIENT_NAME}])=1
+                and last(/PIC - Urbackup/urbackup.client.online[{#CLIENT_NAME}])=1
+                and "{#IMAGE_DISABLED}"<>"true"
+              name: 'UrBackup: [{#CLIENT_NAME}] Pas de backup image depuis >{$URBACKUP_IMAGE_AGE_HIGH_LABEL}'
+              priority: HIGH
+              description: |
+                Aucun backup image depuis plus de {$URBACKUP_IMAGE_AGE_HIGH_LABEL} pour {#CLIENT_NAME} (IP: {#CLIENT_IP}).
+                Le client est EN LIGNE. Si la machine est éteinte/hors ligne, l'alerte bascule en AVERAGE
+                (trigger "(client hors ligne)"), ce qui résout cette alerte HIGH et ferme le ticket GLPI associé.
+                
+                Seuil HIGH = {$URBACKUP_IMAGE_AGE_HIGH} secondes ({$URBACKUP_IMAGE_AGE_HIGH_LABEL}).
+                
+                Le backup image est le seul moyen de restaurer le système complet en cas de panne matérielle.
+                Sans backup image récent, une restauration bare-metal est impossible.
+                
+                Actions urgentes :
+                  - Vérifier l'état du client et de l'agent UrBackup
+                  - Consulter les logs VSS si client Windows Server
+                  - Vérifier l'espace disque sur le serveur UrBackup
+                  - Forcer un backup image depuis l'interface UrBackup
+              dependencies:
+                - name: 'UrBackup: API indisponible sur {HOST.NAME}'
+                  expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: scope
+                  value: backup-age
+            - uuid: b2e4d1c3f5a64b7890bc12de34af5602
+              expression: |
+                last(/PIC - Urbackup/urbackup.client.last_image_age[{#CLIENT_NAME}])>{$URBACKUP_IMAGE_AGE_HIGH}
+                and last(/PIC - Urbackup/urbackup.client.last_image_age[{#CLIENT_NAME}])>0
+                and last(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}])=0
+                and last(/PIC - Urbackup/urbackup.client.image_ok[{#CLIENT_NAME}])=1
+                and last(/PIC - Urbackup/urbackup.client.online[{#CLIENT_NAME}])=0
+                and "{#IMAGE_DISABLED}"<>"true"
+              name: 'UrBackup: [{#CLIENT_NAME}] Pas de backup image depuis >{$URBACKUP_IMAGE_AGE_HIGH_LABEL} (client hors ligne)'
+              priority: AVERAGE
+              description: |
+                Aucun backup image depuis plus de {$URBACKUP_IMAGE_AGE_HIGH_LABEL} pour {#CLIENT_NAME} (IP: {#CLIENT_IP}),
+                ET le client est actuellement HORS LIGNE (machine éteinte ou injoignable).
+                
+                Sévérité abaissée à AVERAGE (vs HIGH lorsque le client est en ligne) :
+                une machine éteinte ne peut pas être sauvegardée, la situation est donc attendue
+                tant qu'elle reste hors ligne.
+                
+                Basculement HIGH → AVERAGE : lorsque le serveur passe hors ligne, le trigger HIGH
+                "Pas de backup image depuis >{$URBACKUP_IMAGE_AGE_HIGH_LABEL}" se résout
+                (condition online=1 devenue fausse), ce qui ferme le ticket GLPI HIGH associé.
+                Ce trigger AVERAGE prend alors le relais (online=0) en moindre priorité.
+                
+                Actions :
+                  - Confirmer que l'arrêt du client est volontaire (maintenance, mise hors service)
+                  - Si la machine doit rester en service : la rallumer pour reprendre les backups
+                  - Si la machine est décommissionnée : supprimer le client dans UrBackup
+              dependencies:
+                - name: 'UrBackup: API indisponible sur {HOST.NAME}'
+                  expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: scope
+                  value: backup-age
+            - uuid: fbdd8026f96a4e31a3eaea7d0538c5ec
+              expression: |
+                last(/PIC - Urbackup/urbackup.client.last_image_age[{#CLIENT_NAME}])>{$URBACKUP_IMAGE_AGE_WARN}
+                and last(/PIC - Urbackup/urbackup.client.last_image_age[{#CLIENT_NAME}])<{$URBACKUP_IMAGE_AGE_HIGH}
+                and last(/PIC - Urbackup/urbackup.client.last_image_age[{#CLIENT_NAME}])>0
+                and last(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}])=0
+                and last(/PIC - Urbackup/urbackup.client.image_ok[{#CLIENT_NAME}])=1
+                and "{#IMAGE_DISABLED}"<>"true"
+              name: 'UrBackup: [{#CLIENT_NAME}] Pas de backup image depuis >{$URBACKUP_IMAGE_AGE_WARN_LABEL}'
+              priority: WARNING
+              description: |
+                Aucun backup image depuis plus de {$URBACKUP_IMAGE_AGE_WARN_LABEL} pour {#CLIENT_NAME} (IP: {#CLIENT_IP}).
+                
+                Seuil WARNING = {$URBACKUP_IMAGE_AGE_WARN} secondes ({$URBACKUP_IMAGE_AGE_WARN_LABEL}).
+                Si la situation persiste, le trigger HIGH se déclenchera à {$URBACKUP_IMAGE_AGE_HIGH_LABEL}.
+                
+                Actions :
+                  - Vérifier la planification du backup image dans UrBackup
+                  - Contrôler les logs pour un éventuel échec du backup image précédent
+              dependencies:
+                - name: 'UrBackup: API indisponible sur {HOST.NAME}'
+                  expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: scope
+                  value: backup-age
+            - uuid: 036244573dee4e5282ebe03b980099b7
+              expression: |
+                min(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}],5d)=1
+                and min(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],1h)=max(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],1h)
+                and last(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}])>0
+                and last(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}])<100
+              name: 'UrBackup: [{#CLIENT_NAME}] Sauvegarde bloquée depuis +5j — intervenir'
+              priority: HIGH
+              description: |
+                Le backup de {#CLIENT_NAME} (IP: {#CLIENT_IP}) est en cours depuis plus de 5 jours
+                et la progression (backup_pc) n'a pas bougé depuis 1h.
+                
+                Situation critique : un backup bloqué aussi longtemps mobilise des ressources
+                (réseau, disque, verrous fichiers) et masque un vrai problème de sauvegarde.
+                
+                Actions urgentes :
+                  - Ouvrir l'interface UrBackup → Activités → vérifier la vitesse (speed_bpms)
+                  - Si vitesse = 0 B/s depuis > 1h : le backup est mort — interrompre via UrBackup
+                  - Vérifier la connectivité réseau avec {#CLIENT_NAME} (ping {#CLIENT_IP})
+                  - Contrôler les verrous fichiers sur le client (handle.exe / lsof)
+                  - Après interruption : lancer manuellement un nouveau backup depuis UrBackup
+                  - Consulter les logs UrBackup (/var/log/urbackup/ ou interface → Logs) pour la cause
+              dependencies:
+                - name: 'UrBackup: API indisponible sur {HOST.NAME}'
+                  expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: scope
+                  value: stuck-backup
+            - uuid: 6f3ce6c80607438da2f6ba60c8806b95
+              expression: |
+                min(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}],3d)=1
+                and min(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],1h)=max(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],1h)
+                and last(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}])>0
+                and last(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}])<100
+              name: 'UrBackup: [{#CLIENT_NAME}] Sauvegarde possiblement bloquée depuis +3j'
+              priority: AVERAGE
+              description: |
+                Le backup de {#CLIENT_NAME} (IP: {#CLIENT_IP}) est en cours depuis plus de 3 jours
+                et la progression n'a pas changé depuis 1h.
+                
+                Un premier backup full ou un gros volume peut légitimement durer plusieurs jours.
+                Cependant, une progression figée pendant 1h est anormale.
+                
+                Actions :
+                  - Vérifier l'interface UrBackup → backup en cours → vitesse de transfert
+                  - Si vitesse nulle : problème réseau ou fichier bloquant le transfert
+                  - Si vitesse faible mais positive : backup lent, surveiller avant d'intervenir
+                  - Si aucune progression dans les prochaines heures → trigger HIGH se déclenche à 5j
+              dependencies:
+                - name: 'UrBackup: API indisponible sur {HOST.NAME}'
+                  expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: scope
+                  value: stuck-backup
+          graph_prototypes:
+            - uuid: 5d62b836c96741fba69efdb5d93fb231
+              name: 'UrBackup: [{#CLIENT_NAME}] Performance'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'PIC - Urbackup'
+                    key: 'urbackup.client.last_duration[{#CLIENT_NAME}]'
+                - sortorder: '1'
+                  color: 2774A4
+                  yaxisside: RIGHT
+                  item:
+                    host: 'PIC - Urbackup'
+                    key: 'urbackup.client.last_size[{#CLIENT_NAME}]'
+            - uuid: 431597ff1bf84e4c98244bb5dbac219c
+              name: 'UrBackup: [{#CLIENT_NAME}] Âge des backups'
+              graph_items:
+                - color: EE0000
+                  item:
+                    host: 'PIC - Urbackup'
+                    key: 'urbackup.client.last_backup_age[{#CLIENT_NAME}]'
+                - sortorder: '1'
+                  color: F5A623
+                  item:
+                    host: 'PIC - Urbackup'
+                    key: 'urbackup.client.last_image_age[{#CLIENT_NAME}]'
+          master_item:
+            key: urbackup.http.master
+          lld_macro_paths:
+            - lld_macro: '{#CLIENT_ID}'
+              path: $.id
+            - lld_macro: '{#CLIENT_IP}'
+              path: $.ip
+            - lld_macro: '{#CLIENT_NAME}'
+              path: $.name
+            - lld_macro: '{#FILE_DISABLED}'
+              path: $.file_disabled
+            - lld_macro: '{#IMAGE_DISABLED}'
+              path: $.image_disabled
+            - lld_macro: '{#IS_SERVER}'
+              path: $.is_server
+            - lld_macro: '{#OS_SIMPLE}'
+              path: $.os_simple
+            - lld_macro: '{#OS_VERSION}'
+              path: $.os_version_string
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.status.status
+        - uuid: b538fd93613f413f819de7fafba52b07
+          name: 'UrBackup: Découverte utilisation disque'
+          type: DEPENDENT
+          key: urbackup.disk.discovery
+          filter:
+            evaltype: OR
+            conditions:
+              - macro: '{#CLIENT_NAME}'
+                value: '{$URBACKUP_SERVER_NAMES}'
+              - macro: '{#IS_SERVER}'
+                value: ^1$
+          lifetime: 3d
+          description: |
+            Règle LLD découvrant les clients pour la supervision de l'utilisation disque.
+            Même filtre que la découverte clients : serveurs/Linux uniquement (is_server=1)
+            ou clients correspondant à {$URBACKUP_SERVER_NAMES}.
+            Les données de stockage proviennent de l'endpoint /x?a=usage.
+          item_prototypes:
+            - uuid: 1f2206cc2af04250a32affd5fba97898
+              name: 'UrBackup: [{#CLIENT_NAME}] Stockage backups fichiers'
+              type: DEPENDENT
+              key: 'urbackup.disk.files[{#CLIENT_NAME}]'
+              history: 30d
+              trends: 90d
+              units: B
+              description: |
+                Espace disque occupé par les backups fichiers de {#CLIENT_NAME} sur le serveur UrBackup (en octets).
+                Inclut tous les backups incrémentaux et complets conservés selon la politique de rétention.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.usage.usage[?(@.name=="{#CLIENT_NAME}")].files.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: disk
+            - uuid: 661fd5c8167b4ca6809c3972121fc9fd
+              name: 'UrBackup: [{#CLIENT_NAME}] Stockage backups images'
+              type: DEPENDENT
+              key: 'urbackup.disk.images[{#CLIENT_NAME}]'
+              history: 30d
+              trends: 90d
+              units: B
+              description: |
+                Espace disque occupé par les backups image de {#CLIENT_NAME} sur le serveur UrBackup (en octets).
+                Les backups image (snapshots disque) sont généralement plus volumineux que les backups fichiers.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.usage.usage[?(@.name=="{#CLIENT_NAME}")].images.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: disk
+            - uuid: 51cfcecfc5444843b0aa51c79f7d7b34
+              name: 'UrBackup: [{#CLIENT_NAME}] Stockage total'
+              type: DEPENDENT
+              key: 'urbackup.disk.total[{#CLIENT_NAME}]'
+              history: 30d
+              trends: 90d
+              units: B
+              description: |
+                Espace disque total occupé par {#CLIENT_NAME} sur le serveur UrBackup (fichiers + images, en octets).
+                Calculé en JavaScript car l'API ne fournit pas directement ce total.
+                Utile pour identifier les clients qui consomment le plus d'espace de stockage.
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      // Calcul du stockage total = fichiers + images pour le client {#CLIENT_NAME}.
+                      // L'API /x?a=usage retourne des entrées séparées pour files et images.
+                      // JSONPath ne permet pas l'addition directe — ce preprocessing JS le fait.
+                      try {
+                        var d = JSON.parse(value);
+                        var usage = d.usage && d.usage.usage ? d.usage.usage : [];
+                        for (var i=0; i<usage.length; i++) {
+                          if (usage[i].name === '{#CLIENT_NAME}') {
+                            return (usage[i].files||0) + (usage[i].images||0);
+                          }
+                        }
+                        return 0;
+                      } catch(e) { return 0; }
+              master_item:
+                key: urbackup.http.master
+              tags:
+                - tag: client
+                  value: '{#CLIENT_NAME}'
+                - tag: component
+                  value: disk
+          graph_prototypes:
+            - uuid: afc1a0f0439147939e5535df875bad08
+              name: 'UrBackup: [{#CLIENT_NAME}] Utilisation disque'
+              graph_items:
+                - color: EE0000
+                  item:
+                    host: 'PIC - Urbackup'
+                    key: 'urbackup.disk.files[{#CLIENT_NAME}]'
+                - sortorder: '1'
+                  color: 2774A4
+                  item:
+                    host: 'PIC - Urbackup'
+                    key: 'urbackup.disk.images[{#CLIENT_NAME}]'
+          master_item:
+            key: urbackup.http.master
+          lld_macro_paths:
+            - lld_macro: '{#CLIENT_ID}'
+              path: $.id
+            - lld_macro: '{#CLIENT_NAME}'
+              path: $.name
+            - lld_macro: '{#IS_SERVER}'
+              path: $.is_server
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.usage.usage
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '[]'
+      tags:
+        - tag: class
+          value: save
+        - tag: target
+          value: urbackup
+      macros:
+        - macro: '{$URBACKUP_BACKUP_AGE_HIGH}'
+          value: '172800'
+          description: 'Seuil HIGH âge dernier backup fichier en secondes (défaut : 48h)'
+        - macro: '{$URBACKUP_BACKUP_AGE_HIGH_LABEL}'
+          value: 48h
+          description: 'Libellé lisible du seuil HIGH fichier — affiché dans les noms de triggers'
+        - macro: '{$URBACKUP_BACKUP_AGE_WARN}'
+          value: '86400'
+          description: 'Seuil WARNING âge dernier backup fichier en secondes (défaut : 24h)'
+        - macro: '{$URBACKUP_BACKUP_AGE_WARN_LABEL}'
+          value: 24h
+          description: 'Libellé lisible du seuil WARNING fichier — affiché dans les noms de triggers'
+        - macro: '{$URBACKUP_IMAGE_AGE_HIGH}'
+          value: '1209600'
+          description: 'Seuil HIGH âge dernier backup image en secondes (défaut : 14 jours)'
+        - macro: '{$URBACKUP_IMAGE_AGE_HIGH_LABEL}'
+          value: '14 jours'
+          description: 'Libellé lisible du seuil HIGH image — affiché dans les noms de triggers'
+        - macro: '{$URBACKUP_IMAGE_AGE_WARN}'
+          value: '604800'
+          description: 'Seuil WARNING âge dernier backup image en secondes (défaut : 7 jours)'
+        - macro: '{$URBACKUP_IMAGE_AGE_WARN_LABEL}'
+          value: '7 jours'
+          description: 'Libellé lisible du seuil WARNING image — affiché dans les noms de triggers'
+        - macro: '{$URBACKUP_NO_DATA_TIMEOUT}'
+          value: 15m
+          description: 'Délai sans données avant déclenchement du trigger API indisponible'
+        - macro: '{$URBACKUP_PASS}'
+          type: SECRET_TEXT
+          description: 'Mot de passe du compte UrBackup — stocké en SECRET_TEXT, jamais visible dans lUI Zabbix'
+        - macro: '{$URBACKUP_PORT}'
+          value: '55414'
+          description: 'Port de lAPI HTTP UrBackup (défaut : 55414)'
+        - macro: '{$URBACKUP_SERVER}'
+          value: 127.0.0.1
+          description: 'IP ou hostname du serveur UrBackup — à surcharger sur lhôte Zabbix'
+        - macro: '{$URBACKUP_SERVER_NAMES}'
+          value: .^
+          description: 'Regex sur le nom client pour forcer lInclusion dans la supervision serveur. Exemple : ^(SERAG|SRVADALGE)$ pour inclure ces deux clients nommément. Défaut .^ = expression qui ne correspond à rien = fonctionnalité inactive. Utile pour les vieux agents qui ne remontent pas os_version_string.'
+        - macro: '{$URBACKUP_STUCK_FREEZE}'
+          value: '1'
+          description: 'Durée (en heures) pendant laquelle la progression du backup doit être figée pour déclencher les alertes "sauvegarde bloquée". Défaut : 1h. Augmenter à 2 ou 3 si des backups très lents génèrent des faux positifs.'
+        - macro: '{$URBACKUP_STUCK_HIGH_DAYS}'
+          value: '5'
+          description: 'Nombre de jours continus de backup en cours avant alerte HIGH "sauvegarde bloquée". Combiné avec la progression figée depuis {$URBACKUP_STUCK_FREEZE}h. Défaut : 5 jours. Au-delà, intervention manuelle requise.'
+        - macro: '{$URBACKUP_STUCK_WARN_DAYS}'
+          value: '3'
+          description: 'Nombre de jours continus de backup en cours avant alerte AVERAGE "sauvegarde possiblement bloquée". Combiné avec la progression figée depuis {$URBACKUP_STUCK_FREEZE}h. Défaut : 3 jours. Si le trigger HIGH se déclenche ({$URBACKUP_STUCK_HIGH_DAYS}j), intervenir.'
+        - macro: '{$URBACKUP_USER}'
+          value: zabbix_monitor
+          description: 'Compte UrBackup dédié au monitoring — droits lecture seule recommandés'
+      dashboards:
+        - uuid: 276667255364416ba24b0fcffcdcf70e
+          name: 'UrBackup — Vue globale'
+          pages:
+            - widgets:
+                - type: problems
+                  name: 'Problèmes actifs'
+                  width: '72'
+                  height: '4'
+                  fields:
+                    - type: INTEGER
+                      name: show
+                      value: '3'
+                    - type: INTEGER
+                      name: show_lines
+                      value: '10'
+                    - type: INTEGER
+                      name: show_tags
+                      value: '2'
+                    - type: INTEGER
+                      name: sort_triggers
+                      value: '16'
+                - type: item
+                  name: 'Clients total'
+                  'y': '4'
+                  width: '18'
+                  height: '4'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid
+                      value:
+                        host: 'PIC - Urbackup'
+                        key: urbackup.clients.total
+                    - type: INTEGER
+                      name: show
+                      value: '2'
+                - type: item
+                  name: 'Échecs fichiers — Serveurs/Linux'
+                  'y': '8'
+                  width: '24'
+                  height: '4'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid
+                      value:
+                        host: 'PIC - Urbackup'
+                        key: urbackup.server.file.failures
+                    - type: INTEGER
+                      name: show
+                      value: '2'
+                - type: graph
+                  name: 'Vue globale clients'
+                  'y': '12'
+                  width: '72'
+                  height: '7'
+                  fields:
+                    - type: GRAPH
+                      name: graphid
+                      value:
+                        host: 'PIC - Urbackup'
+                        name: 'UrBackup: Vue globale clients'
+                - type: item
+                  name: 'Clients en ligne'
+                  x: '18'
+                  'y': '4'
+                  width: '18'
+                  height: '4'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid
+                      value:
+                        host: 'PIC - Urbackup'
+                        key: urbackup.clients.online
+                    - type: INTEGER
+                      name: show
+                      value: '2'
+                - type: item
+                  name: 'Échecs fichiers — Postes de travail'
+                  x: '24'
+                  'y': '8'
+                  width: '24'
+                  height: '4'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid
+                      value:
+                        host: 'PIC - Urbackup'
+                        key: urbackup.workstation.file.failures
+                    - type: INTEGER
+                      name: show
+                      value: '2'
+                - type: item
+                  name: 'Clients hors ligne'
+                  x: '36'
+                  'y': '4'
+                  width: '18'
+                  height: '4'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid
+                      value:
+                        host: 'PIC - Urbackup'
+                        key: urbackup.clients.offline
+                    - type: INTEGER
+                      name: show
+                      value: '2'
+                - type: item
+                  name: 'Échecs images — Serveurs/Linux'
+                  x: '48'
+                  'y': '8'
+                  width: '24'
+                  height: '4'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid
+                      value:
+                        host: 'PIC - Urbackup'
+                        key: urbackup.image.backup.failures
+                    - type: INTEGER
+                      name: show
+                      value: '2'
+                - type: item
+                  name: 'Backups en cours'
+                  x: '54'
+                  'y': '4'
+                  width: '18'
+                  height: '4'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid
+                      value:
+                        host: 'PIC - Urbackup'
+                        key: urbackup.backups.running
+                    - type: INTEGER
+                      name: show
+                      value: '2'
+  graphs:
+    - uuid: d2656cbd7e894978a5b12007b51fbee5
+      name: 'UrBackup: Vue globale clients'
+      graph_items:
+        - color: 1A7C11
+          item:
+            host: 'PIC - Urbackup'
+            key: urbackup.clients.online
+        - sortorder: '1'
+          color: EE0000
+          item:
+            host: 'PIC - Urbackup'
+            key: urbackup.clients.offline
+        - sortorder: '2'
+          color: F5A623
+          item:
+            host: 'PIC - Urbackup'
+            key: urbackup.backups.running

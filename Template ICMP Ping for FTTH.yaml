@@ -1,0 +1,158 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: a1b2c3d4e5f64789a1234567890abcd1
+      name: 'PIC informatique - Template'
+  templates:
+    - uuid: 8b44e1b6707c4f828b61e1891c2b71ac
+      template: 'PIC - FTTH template'
+      name: 'PIC - FTTH template'
+      description: 'Template ICMP Ping for FTTH'
+      readme: |
+        ## Setup
+        
+        Set `Threshold of ICMP packet loss` and `Threshold of the average ICMP response`
+      groups:
+        - name: 'PIC informatique - Template'
+      items:
+        - uuid: c118ed21fecd43e081f143ab98484ad6
+          name: 'ICMP ping'
+          type: SIMPLE
+          key: icmpping
+          valuemap:
+            name: 'Service state'
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: bb2aac55d3b6453cbd20b341c3831dde
+              expression: 'max(/PIC - FTTH template/icmpping,#3)=0'
+              recovery_mode: RECOVERY_EXPRESSION
+              recovery_expression: 'min(/PIC - FTTH template/icmpping,2m)=1'
+              name: 'ICMP Ping: Unavailable by ICMP ping'
+              event_name: 'FTTH - Lien Internet indisponible ({HOST.NAME})'
+              priority: DISASTER
+              description: 'Le lien Internet FTTH ne répond plus aux requêtes ICMP depuis 3 minutes.'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 83595291e4e14ae7b5234a251f59d0ea
+          name: 'ICMP loss'
+          type: SIMPLE
+          key: icmppingloss
+          value_type: FLOAT
+          units: '%'
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: bd9ca742f22441f7b6e70b2033507724
+              expression: 'min(/PIC - FTTH template/icmppingloss,5m)>{$ICMP_LOSS_WARN} and min(/PIC - FTTH template/icmppingloss,5m)<100'
+              name: 'ICMP Ping: High ICMP ping loss'
+              event_name: 'FTTH - Perte ICMP élevée ({HOST.NAME})'
+              opdata: 'Loss: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'ICMP Ping: Unavailable by ICMP ping'
+                  expression: 'max(/PIC - FTTH template/icmpping,#3)=0'
+                  recovery_expression: 'min(/PIC - FTTH template/icmpping,2m)=1'
+              tags:
+                - tag: scope
+                  value: availability
+                - tag: scope
+                  value: performance
+        - uuid: 28641312ca1a4216831a8bf50d957855
+          name: 'ICMP response time'
+          type: SIMPLE
+          key: icmppingsec
+          value_type: FLOAT
+          units: s
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: bdad6b755a284ab68ffcf8f1cd539533
+              expression: 'avg(/PIC - FTTH template/icmppingsec,5m)>{$ICMP_RESPONSE_TIME_WARN}'
+              name: 'ICMP Ping: High ICMP ping response time'
+              event_name: 'FTTH - Latence ICMP élevée ({HOST.NAME})'
+              opdata: 'Value: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              description: 'Average ICMP response time is too high.'
+              dependencies:
+                - name: 'ICMP Ping: High ICMP ping loss'
+                  expression: 'min(/PIC - FTTH template/icmppingloss,5m)>{$ICMP_LOSS_WARN} and min(/PIC - FTTH template/icmppingloss,5m)<100'
+                - name: 'ICMP Ping: Unavailable by ICMP ping'
+                  expression: 'max(/PIC - FTTH template/icmpping,#3)=0'
+                  recovery_expression: 'min(/PIC - FTTH template/icmpping,2m)=1'
+              tags:
+                - tag: scope
+                  value: availability
+                - tag: scope
+                  value: performance
+      tags:
+        - tag: class
+          value: network
+        - tag: target
+          value: icmp
+      macros:
+        - macro: '{$ICMP_LOSS_WARN}'
+          value: '20'
+          description: 'Warning threshold of ICMP packet loss in %.'
+          config:
+            type: TEXT
+            priority: '1'
+            section_name: Thresholds
+            label: 'Threshold of ICMP packet loss'
+            description: 'Warning threshold of ICMP packet loss in %. In the range from 0 to 100 inclusive.'
+            regex: '^-?([0-9]+|(([0-9]+)\.([0-9]+)))$'
+        - macro: '{$ICMP_RESPONSE_TIME_WARN}'
+          value: '0.15'
+          description: 'Warning threshold of the average ICMP response time in seconds.'
+          config:
+            type: TEXT
+            priority: '2'
+            section_name: Thresholds
+            label: 'Threshold of the average ICMP response'
+            description: 'Warning threshold of the average ICMP response time in seconds. No less than 0.'
+            regex: '^-?([0-9]+|(([0-9]+)\.([0-9]+)))$'
+      valuemaps:
+        - uuid: 29a7fca48cf24b40874a7e6d07ed0cf6
+          name: 'Service state'
+          mappings:
+            - value: '0'
+              newvalue: Down
+            - value: '1'
+              newvalue: Up
+  graphs:
+    - uuid: de153701f7b34f6ead8bae648d4013e9
+      name: 'ICMP loss'
+      graph_items:
+        - color: 1A7C11
+          calc_fnc: ALL
+          item:
+            host: 'PIC - FTTH template'
+            key: icmppingloss
+    - uuid: b35e0485625e4461b6a4b8020dc749c5
+      name: 'ICMP ping'
+      yaxismax: '0'
+      graph_items:
+        - color: 1A7C11
+          calc_fnc: ALL
+          item:
+            host: 'PIC - FTTH template'
+            key: icmpping
+    - uuid: bb76f2b490e74cb78d0a66a68742c978
+      name: 'ICMP response time'
+      yaxismax: '0'
+      graph_items:
+        - color: 1A7C11
+          calc_fnc: ALL
+          item:
+            host: 'PIC - FTTH template'
+            key: icmppingsec

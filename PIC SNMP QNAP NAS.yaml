@@ -1,0 +1,536 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: a1b2c3d4e5f64789a1234567890abcd1
+      name: 'PIC informatique - Template'
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
+  templates:
+    - uuid: 7b00e7d5632046db9254ab14f9c0e456
+      template: 'PIC SNMP QNAP NAS'
+      name: 'PIC SNMP QNAP NAS'
+      groups:
+        - name: 'PIC informatique - Template'
+        - name: Templates
+      items:
+        - uuid: 5ed829a2c29d4107b66b21d0941a3800
+          name: 'CPU temperature'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.4.1.24681.1.3.5.0
+          key: CPU-TemperatureEX
+          delay: '60'
+          history: 90d
+          units: C
+          description: 'CPU temperature in centigrade'
+          tags:
+            - tag: Application
+              value: System
+        - uuid: a5be04121c4e4c15a45541c51af424ce
+          name: 'Device system name'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.4.1.24681.1.3.13.0
+          key: HostNameEX
+          delay: '3600'
+          history: 7d
+          value_type: TEXT
+          description: 'Host name'
+          tags:
+            - tag: Application
+              value: System
+        - uuid: aa28b15f52984db483c22dde15fb860f
+          name: 'Device model name'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.4.1.24681.1.3.12.0
+          key: ModelNameEX
+          delay: '10800'
+          history: 1d
+          value_type: TEXT
+          tags:
+            - tag: Application
+              value: System
+        - uuid: 6be137c25e1d4180a4228b1235469e46
+          name: 'Device firmware revision'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.2.1.47.1.1.1.1.9.1
+          key: PhysicalFirmwareRev
+          delay: '3600'
+          history: 90d
+          value_type: TEXT
+          inventory_link: SOFTWARE
+          tags:
+            - tag: Application
+              value: System
+          triggers:
+            - uuid: 588a9b3a6fb8464c8afab835446e8921
+              expression: '(last(/PIC SNMP QNAP NAS/PhysicalFirmwareRev,#1)<>last(/PIC SNMP QNAP NAS/PhysicalFirmwareRev,#2))>0'
+              name: 'Firmware on {HOST.NAME} is changed'
+              status: DISABLED
+              priority: INFO
+        - uuid: 6d64101f49eb461d8350d9ab2d5b9b37
+          name: 'Device hardware revision'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.2.1.47.1.1.1.1.8.1
+          key: PhysicalHardwareRev
+          delay: '10800'
+          history: 1d
+          value_type: TEXT
+          inventory_link: HARDWARE
+          tags:
+            - tag: Application
+              value: System
+        - uuid: fabd71178fc14ccd84366866ff7c883d
+          name: 'Device software revision'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.2.1.47.1.1.1.1.10.1
+          key: PhysicalSoftwareRev
+          delay: '3600'
+          history: 90d
+          value_type: TEXT
+          tags:
+            - tag: Application
+              value: System
+        - uuid: 73109073505a4e1285e12d1b550c5710
+          name: 'Device vendor name'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.2.1.47.1.1.1.1.12.1
+          key: sysPhysicalMfgName
+          delay: '3600'
+          history: 1d
+          value_type: TEXT
+          inventory_link: VENDOR
+          tags:
+            - tag: Application
+              value: System
+        - uuid: 943cb86edc6e4c7fa6c014d6d833cd40
+          name: 'CPU usage'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.4.1.24681.1.3.1.0
+          key: SystemCPU-UsageEX
+          delay: '60'
+          history: 90d
+          units: '%'
+          description: 'System CPU usage'
+          tags:
+            - tag: Application
+              value: System
+          triggers:
+            - uuid: 448960df96df4d13ac09c4e06a494875
+              expression: 'min(/PIC SNMP QNAP NAS/SystemCPU-UsageEX,15m)>80'
+              name: 'CPU utilization on {HOST.NAME} is over 80% for 15 min'
+              status: DISABLED
+              priority: WARNING
+            - uuid: 726a296f47dd48549a0844a6f56ff324
+              expression: 'min(/PIC SNMP QNAP NAS/SystemCPU-UsageEX,15m)>95'
+              name: 'CPU utilization on {HOST.NAME} is over 95% for 15 min'
+              status: DISABLED
+              priority: AVERAGE
+        - uuid: e89c597ca4ac4cac97492c8924f73552
+          name: 'System free memory'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.4.1.24681.1.3.3.0
+          key: SystemFreeMemEX
+          delay: '60'
+          history: 90d
+          units: b
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1000'
+          tags:
+            - tag: Application
+              value: System
+        - uuid: bc96973c8bb34e9daeba9b6c429d0dab
+          name: 'System free memory (%)'
+          type: CALCULATED
+          key: SystemPFreeMemEX
+          delay: '60'
+          history: 90d
+          value_type: FLOAT
+          units: '%'
+          params: last(//SystemFreeMemEX)/(last(//SystemTotalMemEX)/100)
+          tags:
+            - tag: Application
+              value: System
+        - uuid: 44df3820db9b40879ee74bb7d1ad42bc
+          name: 'System temperature'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.4.1.24681.1.3.6.0
+          key: SystemTemperatureEX
+          delay: '60'
+          history: 90d
+          units: C
+          description: 'System temperature in centigrade'
+          tags:
+            - tag: Application
+              value: System
+        - uuid: fdef464f433542a1b292bc422bda2741
+          name: 'System total memory'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.4.1.24681.1.3.2.0
+          key: SystemTotalMemEX
+          delay: '10800'
+          history: 1d
+          units: b
+          tags:
+            - tag: Application
+              value: System
+        - uuid: 2407529ebf754ed4b3f43fd3a05af7d7
+          name: 'System uptime'
+          type: SNMP_AGENT
+          snmp_oid: .1.3.6.1.2.1.25.1.1.0
+          key: sysUptime
+          delay: 60s
+          history: 1d
+          units: uptime
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+          tags:
+            - tag: Application
+              value: System
+          triggers:
+            - uuid: 8ddace91d9b4400e97f9f2d87534991f
+              expression: 'change(/PIC SNMP QNAP NAS/sysUptime)<0'
+              name: '{HOST.NAME} has just been restarted'
+              priority: HIGH
+      discovery_rules:
+        - uuid: 45254bf344bb40a587eb690082df7738
+          name: 'Network interfaces discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},.1.3.6.1.4.1.24681.1.2.9.1.2]'
+          key: netIfs.discovery
+          delay: '3600'
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: ec1be7940c264e54847af4eb40417db3
+              name: 'Error $2 on $1'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.2.9.1.5.{#SNMPINDEX}'
+              key: 'net.if.err[{#SNMPVALUE},bps]'
+              delay: '60'
+              units: bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+              tags:
+                - tag: Application
+                  value: 'Network interfaces'
+            - uuid: bcff73e303df4b908039efd2cc1d6ee2
+              name: 'Received $2 on $1'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.2.9.1.3.{#SNMPINDEX}'
+              key: 'net.if.in[{#SNMPVALUE}, bps]'
+              delay: '60'
+              units: bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+              tags:
+                - tag: Application
+                  value: 'Network interfaces'
+            - uuid: 7ae86577d55b4b24bec4b1bc24c0ed90
+              name: 'Sent $2 on $1'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.2.9.1.4.{#SNMPINDEX}'
+              key: 'net.if.out[{#SNMPVALUE}, bps]'
+              delay: '60'
+              units: bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+              tags:
+                - tag: Application
+                  value: 'Network interfaces'
+          graph_prototypes:
+            - uuid: ed48cd1937b7469094c13d6f67c6396b
+              name: 'Traffic on {#SNMPVALUE} (PPS)'
+              ymin_type_1: FIXED
+              graph_items:
+                - drawtype: GRADIENT_LINE
+                  color: 00BB00
+                  calc_fnc: MAX
+                  item:
+                    host: 'PIC SNMP QNAP NAS'
+                    key: 'net.if.in[{#SNMPVALUE}, bps]'
+                - sortorder: '1'
+                  drawtype: GRADIENT_LINE
+                  color: 0000BB
+                  calc_fnc: MAX
+                  item:
+                    host: 'PIC SNMP QNAP NAS'
+                    key: 'net.if.out[{#SNMPVALUE}, bps]'
+                - sortorder: '2'
+                  drawtype: GRADIENT_LINE
+                  color: BB0000
+                  calc_fnc: MAX
+                  item:
+                    host: 'PIC SNMP QNAP NAS'
+                    key: 'net.if.err[{#SNMPVALUE},bps]'
+        - uuid: 89db421bdea24abe9514ff3be982b34e
+          name: 'System fans discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},.1.3.6.1.4.1.24681.1.3.15.1.2]'
+          key: sysFans.discovery
+          delay: '3600'
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: e8749651a97d498582e1dc58c6c342aa
+              name: 'Speed of {#SNMPVALUE}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.3.15.1.3.{#SNMPINDEX}'
+              key: 'SysFanSpeedEX[{#SNMPINDEX}]'
+              delay: '60'
+              history: 1d
+              units: RPM
+              tags:
+                - tag: Application
+                  value: 'Sytem fans'
+              trigger_prototypes:
+                - uuid: 5fc09d5ab0f84ca88026c7405a003231
+                  expression: 'max(/PIC SNMP QNAP NAS/SysFanSpeedEX[{#SNMPINDEX}],60s)=0'
+                  name: '{#SNMPVALUE} fan on {HOST.NAME} possibly is stopped'
+                  status: DISABLED
+                  priority: WARNING
+        - uuid: 82661254eb224c9fbd900d533bdccebd
+          name: 'Hard disks discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},.1.3.6.1.4.1.24681.1.3.11.1.2]'
+          key: sysHDs.discovery
+          delay: '3600'
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: 7ef4747696e04a05a66ad857088ef148
+              name: 'Capacity of {#SNMPVALUE}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.3.11.1.6.{#SNMPINDEX}'
+              key: 'HdCapacityEX[{#SNMPINDEX}]'
+              delay: '3600'
+              units: B
+              tags:
+                - tag: Application
+                  value: 'Hard disks'
+            - uuid: d141273539b2416dae55d593d25c13da
+              name: 'Model of {#SNMPVALUE}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.3.11.1.5.{#SNMPINDEX}'
+              key: 'HdModelEX[{#SNMPINDEX}]'
+              delay: '3600'
+              value_type: TEXT
+              tags:
+                - tag: Application
+                  value: 'Hard disks'
+            - uuid: a764b5d0b09b465f8dd0bf605074efd4
+              name: 'S.M.A.R.T. info of {#SNMPVALUE}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.3.11.1.7.{#SNMPINDEX}'
+              key: 'HdSmartInfoEX[{#SNMPINDEX}]'
+              delay: '60'
+              value_type: TEXT
+              tags:
+                - tag: Application
+                  value: 'Hard disks'
+              trigger_prototypes:
+                - uuid: 30c5bf0889fa4c78b76ca13b2c67951a
+                  expression: 'find(/PIC SNMP QNAP NAS/HdSmartInfoEX[{#SNMPINDEX}],,"iregexp","abnormal")=1'
+                  name: 'SMART state of {#SNMPVALUE} on {HOST.NAME} is ABNORMAL'
+                  priority: AVERAGE
+                  description: |
+                    Abnormal
+                    1. Any SMART value is equal or less than trhreshold.
+                    2. Hard Disk temperature is higher than 65 degree C.
+                    --------
+                    QNAP Knowledgebase
+                - uuid: 32026078af1c4a96a5006cb233a9c330
+                  expression: 'find(/PIC SNMP QNAP NAS/HdSmartInfoEX[{#SNMPINDEX}],,"iregexp","normal")=1'
+                  name: 'SMART state of {#SNMPVALUE} on {HOST.NAME} is not GOOD ({ITEM.VALUE1})'
+                  priority: WARNING
+                  description: |
+                    Normal
+                    1. Any Smart value is equal or less than threhold + (initial_SMART_value - threhold)/2.  For example, if the initial SMART value is 100, the current value is 50, the threshold is 20, then the Smart value, 50, is less than 20+(100-20)/2.  Thus, the health level would be Normal.
+                    2. Any SMART test(Rapid or Complete) result of last 20 times is abnormal.
+                    3. Hard Disk temperature is between 55 to 65 degree C.
+                    --------
+                    QNAP Knowledgebase
+            - uuid: b9f54d6557b747e39801ae213ead2739
+              name: 'Status of {#SNMPVALUE}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.3.11.1.4.{#SNMPINDEX}'
+              key: 'HdStatusEX[{#SNMPINDEX}]'
+              delay: '60'
+              value_type: FLOAT
+              tags:
+                - tag: Application
+                  value: 'Hard disks'
+              trigger_prototypes:
+                - uuid: b597367967de4e3dac2f3f324f2fbce6
+                  expression: 'last(/PIC SNMP QNAP NAS/HdStatusEX[{#SNMPINDEX}])=-6'
+                  name: 'State of {#SNMPVALUE} on {HOST.NAME} is "Invalid"'
+                  status: DISABLED
+                  priority: WARNING
+                  description: 'State "Invalid"'
+                - uuid: 5524517185c34cfca4d64d825d122daf
+                  expression: 'last(/PIC SNMP QNAP NAS/HdStatusEX[{#SNMPINDEX}])=-5'
+                  name: 'State of {#SNMPVALUE} on {HOST.NAME} is "noDisk"'
+                  status: DISABLED
+                  priority: INFO
+                  description: 'State "noDisk"'
+                - uuid: 111adcabf3164b24a35083f1697e3b30
+                  expression: 'last(/PIC SNMP QNAP NAS/HdStatusEX[{#SNMPINDEX}])=-9'
+                  name: 'State of {#SNMPVALUE} on {HOST.NAME} is "rwError"'
+                  status: DISABLED
+                  priority: WARNING
+                  description: 'State "rwError"'
+                - uuid: 00c51d0aa5e24d79bce162acd217bf2a
+                  expression: 'last(/PIC SNMP QNAP NAS/HdStatusEX[{#SNMPINDEX}])<>0'
+                  name: 'State of {#SNMPVALUE} on {HOST.NAME} is not "Ready" ({ITEM.VALUE1})'
+                  status: DISABLED
+                  priority: INFO
+            - uuid: 62c926eccf6849338f5c7e02afcadff3
+              name: 'Temperature of {#SNMPVALUE}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.3.11.1.3.{#SNMPINDEX}'
+              key: 'HdTemperatureEX[{#SNMPINDEX}]'
+              delay: '60'
+              value_type: FLOAT
+              units: C
+              tags:
+                - tag: Application
+                  value: 'Hard disks'
+              trigger_prototypes:
+                - uuid: b7862830e1d4414ba293699480708636
+                  expression: 'min(/PIC SNMP QNAP NAS/HdTemperatureEX[{#SNMPINDEX}],2m)>{$HD_TEMPERATURE_ALARM}'
+                  name: 'Temperature of {#SNMPVALUE} on {HOST.NAME} is over {$HD_TEMPERATURE_ALARM} for 2 min'
+                  status: DISABLED
+                  priority: HIGH
+                - uuid: 0852f172d9d44508839081221d6af92b
+                  expression: 'min(/PIC SNMP QNAP NAS/HdTemperatureEX[{#SNMPINDEX}],2m)>{$HD_TEMPERATURE_WARNING}'
+                  name: 'Temperature of {#SNMPVALUE} on {HOST.NAME} is over {$HD_TEMPERATURE_WARNING} for 2min'
+                  status: DISABLED
+                  priority: INFO
+        - uuid: 779d6d77b55a4234b282125723d7bd2f
+          name: 'Volumes discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},.1.3.6.1.4.1.24681.1.3.17.1.2]'
+          key: sysVolumes.discovery
+          delay: '3600'
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: 14c7e089f39f4c57bd3f2be44247fe66
+              name: 'Free size of {#SNMPVALUE}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.3.17.1.5.{#SNMPINDEX}'
+              key: 'SysVolumeFreeSizeEX[{#SNMPINDEX}]'
+              delay: '60'
+              units: B
+              preprocessing:
+                - type: MULTIPLIER
+                  parameters:
+                    - '1024'
+              tags:
+                - tag: Application
+                  value: Volumes
+            - uuid: cd9c59904d0b46e0806eff387d0a4b1d
+              name: 'Free size of {#SNMPVALUE} (%)'
+              type: CALCULATED
+              key: 'SysVolumePFreeSizeEX[{#SNMPINDEX}]'
+              delay: '60'
+              value_type: FLOAT
+              units: '%'
+              params: 'last(//SysVolumeFreeSizeEX[{#SNMPINDEX}])/(last(//SysVolumeTotalSizeEX[{#SNMPINDEX}])/100)'
+              tags:
+                - tag: Application
+                  value: Volumes
+              trigger_prototypes:
+                - uuid: c9cb4f86dc274ac8b8e90ffd9c9b49b8
+                  expression: 'last(/PIC SNMP QNAP NAS/SysVolumePFreeSizeEX[{#SNMPINDEX}])<20'
+                  name: 'Free space is less than 20% on volume {#SNMPVALUE}'
+                  status: DISABLED
+                  priority: WARNING
+            - uuid: f2c950cac6864d95af6d922dec91fcb7
+              name: 'Status of {#SNMPVALUE}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.3.17.1.6.{#SNMPINDEX}'
+              key: 'SysVolumeStatusEX[{#SNMPINDEX}]'
+              delay: '60'
+              value_type: TEXT
+              tags:
+                - tag: Application
+                  value: Volumes
+            - uuid: e7fa7f7e5ca44e3a809c352b2dcf5d3c
+              name: 'Total size of {#SNMPVALUE}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.4.1.24681.1.3.17.1.4.{#SNMPINDEX}'
+              key: 'SysVolumeTotalSizeEX[{#SNMPINDEX}]'
+              delay: '3600'
+              units: B
+              preprocessing:
+                - type: MULTIPLIER
+                  parameters:
+                    - '1024'
+              tags:
+                - tag: Application
+                  value: Volumes
+          graph_prototypes:
+            - uuid: 400f6aeaa3394fcdaa0902c391868f7a
+              name: 'Volume {#SNMPVALUE} usage'
+              ymin_type_1: FIXED
+              graph_items:
+                - drawtype: GRADIENT_LINE
+                  color: 8888FF
+                  calc_fnc: MAX
+                  item:
+                    host: 'PIC SNMP QNAP NAS'
+                    key: 'SysVolumeTotalSizeEX[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  drawtype: FILLED_REGION
+                  color: '008800'
+                  calc_fnc: MAX
+                  item:
+                    host: 'PIC SNMP QNAP NAS'
+                    key: 'SysVolumeFreeSizeEX[{#SNMPINDEX}]'
+      macros:
+        - macro: '{$HD_TEMPERATURE_ALARM}'
+          value: '51'
+        - macro: '{$HD_TEMPERATURE_WARNING}'
+          value: '40'
+  graphs:
+    - uuid: 0b55990b7c3647e7b5df8fd9addfcece
+      name: 'CPU utilization'
+      ymin_type_1: FIXED
+      graph_items:
+        - color: 00BB00
+          item:
+            host: 'PIC SNMP QNAP NAS'
+            key: SystemCPU-UsageEX
+    - uuid: 75cc66731c184eaf8425d306934bcaf9
+      name: 'Device temperature'
+      ymin_type_1: FIXED
+      graph_items:
+        - color: BB0000
+          item:
+            host: 'PIC SNMP QNAP NAS'
+            key: CPU-TemperatureEX
+        - sortorder: '1'
+          color: 0000BB
+          item:
+            host: 'PIC SNMP QNAP NAS'
+            key: SystemTemperatureEX
+    - uuid: 9da211ccd0ce4c1091468edd1f1b8ec8
+      name: 'Memory usage'
+      ymin_type_1: FIXED
+      graph_items:
+        - drawtype: GRADIENT_LINE
+          color: 00BBBB
+          calc_fnc: MAX
+          item:
+            host: 'PIC SNMP QNAP NAS'
+            key: SystemTotalMemEX
+        - sortorder: '1'
+          drawtype: FILLED_REGION
+          color: '008800'
+          calc_fnc: MAX
+          item:
+            host: 'PIC SNMP QNAP NAS'
+            key: SystemFreeMemEX

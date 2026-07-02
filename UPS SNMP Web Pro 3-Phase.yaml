@@ -1,0 +1,788 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: a1b2c3d4e5f64789a1234567890abcd1
+      name: 'PIC informatique - Template'
+    - uuid: 7df96b18c230490a9a0a9b2a14bf7178
+      name: 'Templates/Network devices'
+  templates:
+    - uuid: 0d893509bffb45d797bf2c4a50d4477b
+      template: 'UPS SNMP Web Pro 3-Phase'
+      name: 'PIC - UPS SNMP Web Pro 3-Phase'
+      description: |
+        Template for UPS equipped with SNMP Web Pro 1.1 card — 3-phase version
+        Based on RFC 1628 (UPS-MIB — 1.3.6.1.2.1.33)
+        
+        Tested on: SNMP Web Pro 1.1 (Pharmacie des Salines — 192.168.1.230)
+        
+        Coverage:
+          - Identity: manufacturer, model, firmware
+          - UPS status: mode, alarms count, temperature
+          - Battery: status, capacity, runtime, voltage, seconds on battery
+          - Input  3-phase: voltage L1/L2/L3, frequency
+          - Output 3-phase: voltage L1/L2/L3, current L1/L2/L3, load L1/L2/L3, frequency
+          - Bypass 3-phase: voltage L1/L2/L3, frequency
+          - EMD: temperature, humidity (if probe connected)
+        
+        Security:
+          - Override {$SNMP_COMMUNITY} with a Secret macro (never leave 'public')
+          - Restrict SNMP polling to Zabbix Proxy IP via UPS ACL
+          - Upgrade to SNMPv3 authPriv if firmware supports it
+        
+        Version : 1.1.0 — Zabbix 7.4 compatible
+      groups:
+        - name: 'PIC informatique - Template'
+        - name: 'Templates/Network devices'
+      items:
+        - uuid: 28359e4456dd4ae184cb0d881d9de2ff
+          name: 'UPS: Active Alarms Count'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.6.1.0
+          key: ups.alarms.present
+          delay: 60s
+          history: 30d
+          trends: 90d
+          description: 'upsAlarmsPresent — number of active alarm conditions'
+          tags:
+            - tag: component
+              value: alarms
+          triggers:
+            - uuid: a14c0bdc1f544024b892ba4d3f8af00e
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.alarms.present)>0'
+              name: 'UPS: {ITEM.LASTVALUE} active alarm(s) — check web interface'
+              priority: HIGH
+              description: 'upsAlarmsPresent > 0. Connect to UPS web interface to identify alarms. Current known warning: Battery replace.'
+              tags:
+                - tag: scope
+                  value: alarms
+        - uuid: 3471f05517ca4fb9b6f5fa324344ffaa
+          name: 'Battery: Capacity'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.2.4.0
+          key: ups.battery.charge
+          delay: 120s
+          history: 30d
+          units: '%'
+          description: 'upsEstimatedChargeRemaining (RFC1628)'
+          tags:
+            - tag: component
+              value: battery
+          triggers:
+            - uuid: 62b0c8525c044565a9a382355bdd9bf1
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.battery.charge)<{$UPS.BATTERY.CAPACITY.MIN.CRIT}'
+              name: 'Battery: Capacity critical (<{$UPS.BATTERY.CAPACITY.MIN.CRIT}%)'
+              priority: DISASTER
+              tags:
+                - tag: scope
+                  value: battery
+            - uuid: c21a412268334c658aeea5a119c4a5c2
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.battery.charge)<{$UPS.BATTERY.CAPACITY.MIN.WARN} and last(/UPS SNMP Web Pro 3-Phase/ups.battery.charge)>={$UPS.BATTERY.CAPACITY.MIN.CRIT}'
+              name: 'Battery: Capacity warning (<{$UPS.BATTERY.CAPACITY.MIN.WARN}%)'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: battery
+        - uuid: 713cf46cc88d422b8c96cb391f4775f7
+          name: 'Battery: Estimated Runtime'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.2.3.0
+          key: ups.battery.runtime
+          delay: 120s
+          history: 30d
+          units: min
+          description: 'upsEstimatedMinutesRemaining (RFC1628)'
+          tags:
+            - tag: component
+              value: battery
+          triggers:
+            - uuid: 08b36532d72a4677b310f2f9542da5f2
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.battery.runtime)<{$UPS.BATTERY.RUNTIME.MIN.CRIT}'
+              name: 'Battery: Runtime critical (<{$UPS.BATTERY.RUNTIME.MIN.CRIT} min)'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: battery
+            - uuid: 58f90addb28944c2aa8148a44228e92c
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.battery.runtime)<{$UPS.BATTERY.RUNTIME.MIN.WARN} and last(/UPS SNMP Web Pro 3-Phase/ups.battery.runtime)>={$UPS.BATTERY.RUNTIME.MIN.CRIT}'
+              name: 'Battery: Runtime warning (<{$UPS.BATTERY.RUNTIME.MIN.WARN} min)'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: battery
+        - uuid: c8ac49f2d9e14292b0e896efde1dead1
+          name: 'Battery: Seconds on Battery'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.2.2.0
+          key: ups.battery.seconds.on.battery
+          delay: 60s
+          history: 30d
+          units: s
+          description: 'upsSecondsOnBattery — 0 when on line power'
+          tags:
+            - tag: component
+              value: battery
+        - uuid: d113fb71cf8f41b6b8d9bf77ab770e59
+          name: 'Battery: Status'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.2.1.0
+          key: ups.battery.status
+          delay: 60s
+          history: 30d
+          trends: 90d
+          description: |
+            upsBatteryStatus (RFC1628 — 1.3.6.1.2.1.33.1.2.1.0)
+            1=Unknown | 2=Normal | 3=Low | 4=Depleted
+          tags:
+            - tag: component
+              value: battery
+          triggers:
+            - uuid: 198b7fe1cb45461399bab4175c6d2f15
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.battery.status)=4'
+              name: 'Battery: DEPLETED — imminent shutdown'
+              priority: DISASTER
+              description: 'upsBatteryStatus = 4 (Depleted). UPS shutdown imminent.'
+              tags:
+                - tag: scope
+                  value: battery
+            - uuid: 346c252e657b458ea70949cf94c9786e
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.battery.status)=3'
+              name: 'Battery: Low battery warning'
+              priority: HIGH
+              description: 'upsBatteryStatus = 3 (Low). Imminent shutdown if power not restored.'
+              tags:
+                - tag: scope
+                  value: battery
+            - uuid: 58115fb8f928419dac4ce7c0bd2760d3
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.battery.status)=1'
+              name: 'Battery: Status unknown'
+              priority: HIGH
+              description: 'upsBatteryStatus = 1 (Unknown).'
+              tags:
+                - tag: scope
+                  value: battery
+            - uuid: 3f5c99a93d0b4c87817d60e09217d43c
+              expression: 'nodata(/UPS SNMP Web Pro 3-Phase/ups.battery.status,2m)=1'
+              name: 'UPS: No SNMP data for 2 minutes'
+              priority: HIGH
+              description: 'SNMP polling failed — check community string and ACL.'
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 1c4f050bcc874dde801c9aa84164d0c4
+          name: 'Battery: Voltage (Positive string)'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.2.5.0
+          key: ups.battery.voltage
+          delay: 120s
+          history: 30d
+          value_type: FLOAT
+          units: V
+          description: 'upsBatteryVoltage — raw 0.1V units, multiplied by 0.1'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.1'
+          tags:
+            - tag: component
+              value: battery
+        - uuid: 487f4323b2d5490b97e8e3d5005122cc
+          name: 'Bypass: Frequency'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.5.1.0
+          key: ups.bypass.frequency
+          delay: 120s
+          history: 30d
+          value_type: FLOAT
+          units: Hz
+          description: 'upsBypassFrequency — raw 0.1Hz units'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.1'
+          tags:
+            - tag: component
+              value: bypass
+        - uuid: 250a1f6e385f451f872395f30d0a9989
+          name: 'Bypass: Voltage L1'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.5.3.1.2.1
+          key: ups.bypass.voltage.l1
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: V
+          description: 'upsBypassVoltage phase 1 — RMS Volts'
+          tags:
+            - tag: component
+              value: bypass
+            - tag: phase
+              value: L1
+        - uuid: 4ed124e1f0294fa18aaa3f3c4baa04ea
+          name: 'Bypass: Voltage L2'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.5.3.1.2.2
+          key: ups.bypass.voltage.l2
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: V
+          description: 'upsBypassVoltage phase 2 — RMS Volts'
+          tags:
+            - tag: component
+              value: bypass
+            - tag: phase
+              value: L2
+        - uuid: 79ba8e9130564a9b8c9c2a074ec4dafc
+          name: 'Bypass: Voltage L3'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.5.3.1.2.3
+          key: ups.bypass.voltage.l3
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: V
+          description: 'upsBypassVoltage phase 3 — RMS Volts'
+          tags:
+            - tag: component
+              value: bypass
+            - tag: phase
+              value: L3
+        - uuid: 83cda478a1214d84a4c82700efb67281
+          name: 'EMD: Humidity'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2254.2.4.7.2.0
+          key: ups.emd.humidity
+          delay: 120s
+          history: 30d
+          value_type: FLOAT
+          units: '%'
+          description: 'EMD humidity probe (private MIB). noSuchObject if no probe connected.'
+          tags:
+            - tag: component
+              value: environment
+        - uuid: 9c1d9e3b2e524f2c8820913beeacd2e1
+          name: 'EMD: Temperature'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2254.2.4.7.1.0
+          key: ups.emd.temperature
+          delay: 120s
+          history: 30d
+          value_type: FLOAT
+          units: °C
+          description: 'EMD temperature probe (private MIB). noSuchObject if no probe connected.'
+          tags:
+            - tag: component
+              value: environment
+        - uuid: cb620591716a472a97786ea21a5983a0
+          name: 'UPS: Agent Firmware Version'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.1.4.0
+          key: ups.ident.agent.version
+          delay: 1h
+          history: 7d
+          value_type: CHAR
+          description: 'upsIdentAgentSoftwareVersion (RFC1628)'
+          tags:
+            - tag: component
+              value: identity
+        - uuid: 45de0f6c8a58417cab65aaaac4c860a0
+          name: 'UPS: Manufacturer'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.1.1.0
+          key: ups.ident.manufacturer
+          delay: 1h
+          history: 7d
+          value_type: CHAR
+          description: 'upsIdentManufacturer (RFC1628)'
+          tags:
+            - tag: component
+              value: identity
+        - uuid: fbae530033d84a27989f9c6dcbe48908
+          name: 'UPS: Model'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.1.2.0
+          key: ups.ident.model
+          delay: 1h
+          history: 7d
+          value_type: CHAR
+          description: 'upsIdentModel (RFC1628)'
+          tags:
+            - tag: component
+              value: identity
+        - uuid: 54885451d7bd4a4fa83e738a500de363
+          name: 'Input: Frequency'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.3.3.1.2.1
+          key: ups.input.frequency
+          delay: 120s
+          history: 30d
+          value_type: FLOAT
+          units: Hz
+          description: 'upsInputFrequency — raw 0.1Hz units'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.1'
+          tags:
+            - tag: component
+              value: input
+        - uuid: 9322183324134249b23a88269c9b0678
+          name: 'Input: Voltage L1'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.3.3.1.3.1
+          key: ups.input.voltage.l1
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: V
+          description: 'upsInputVoltage phase 1 — RMS Volts'
+          tags:
+            - tag: component
+              value: input
+            - tag: phase
+              value: L1
+          triggers:
+            - uuid: 32cfdb0c2c1d4dc49e17f18cbd7ebab6
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.input.voltage.l1)<{$UPS.INPUT.VOLTAGE.MIN.WARN} or last(/UPS SNMP Web Pro 3-Phase/ups.input.voltage.l1)>{$UPS.INPUT.VOLTAGE.MAX.WARN}'
+              name: 'Input L1: Voltage out of range [{$UPS.INPUT.VOLTAGE.MIN.WARN}-{$UPS.INPUT.VOLTAGE.MAX.WARN}V]'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: input
+        - uuid: 31181bb30b5144f7836f1a77902f1821
+          name: 'Input: Voltage L2'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.3.3.1.3.2
+          key: ups.input.voltage.l2
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: V
+          description: 'upsInputVoltage phase 2 — RMS Volts'
+          tags:
+            - tag: component
+              value: input
+            - tag: phase
+              value: L2
+          triggers:
+            - uuid: 5bd06129adeb4299b96e3b24ae621dcf
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.input.voltage.l2)<{$UPS.INPUT.VOLTAGE.MIN.WARN} or last(/UPS SNMP Web Pro 3-Phase/ups.input.voltage.l2)>{$UPS.INPUT.VOLTAGE.MAX.WARN}'
+              name: 'Input L2: Voltage out of range [{$UPS.INPUT.VOLTAGE.MIN.WARN}-{$UPS.INPUT.VOLTAGE.MAX.WARN}V]'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: input
+        - uuid: 48d9ac0cd780439f815f1c602ae1e28b
+          name: 'Input: Voltage L3'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.3.3.1.3.3
+          key: ups.input.voltage.l3
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: V
+          description: 'upsInputVoltage phase 3 — RMS Volts'
+          tags:
+            - tag: component
+              value: input
+            - tag: phase
+              value: L3
+          triggers:
+            - uuid: 94391be71c214da79e0871003e5eaf11
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.input.voltage.l3)<{$UPS.INPUT.VOLTAGE.MIN.WARN} or last(/UPS SNMP Web Pro 3-Phase/ups.input.voltage.l3)>{$UPS.INPUT.VOLTAGE.MAX.WARN}'
+              name: 'Input L3: Voltage out of range [{$UPS.INPUT.VOLTAGE.MIN.WARN}-{$UPS.INPUT.VOLTAGE.MAX.WARN}V]'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: input
+        - uuid: ea7b2f34466746b4a5f042b7abf3b069
+          name: 'Output: Current L1'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.4.4.1.3.1
+          key: ups.output.current.l1
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: A
+          description: 'upsOutputCurrent phase 1 — raw 0.1A units'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.1'
+          tags:
+            - tag: component
+              value: output
+            - tag: phase
+              value: L1
+        - uuid: 52f07cdb8cb2401daf4e8ba0acb6279a
+          name: 'Output: Current L2'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.4.4.1.3.2
+          key: ups.output.current.l2
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: A
+          description: 'upsOutputCurrent phase 2 — raw 0.1A units'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.1'
+          tags:
+            - tag: component
+              value: output
+            - tag: phase
+              value: L2
+        - uuid: d7b6e9a4977c4632acf73627d81b90e6
+          name: 'Output: Current L3'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.4.4.1.3.3
+          key: ups.output.current.l3
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: A
+          description: 'upsOutputCurrent phase 3 — raw 0.1A units'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.1'
+          tags:
+            - tag: component
+              value: output
+            - tag: phase
+              value: L3
+        - uuid: cc38e8d004b649afa794264b5eead021
+          name: 'Output: Frequency'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.4.2.0
+          key: ups.output.frequency
+          delay: 120s
+          history: 30d
+          value_type: FLOAT
+          units: Hz
+          description: 'upsOutputFrequency — raw 0.1Hz units'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.1'
+          tags:
+            - tag: component
+              value: output
+        - uuid: 684ee3dce0fe4b12ab2cac632267b2e8
+          name: 'Output: Load Level L1'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.4.4.1.5.1
+          key: ups.output.load.l1
+          delay: 60s
+          history: 30d
+          units: '%'
+          description: 'upsOutputPercentLoad phase 1'
+          tags:
+            - tag: component
+              value: output
+            - tag: phase
+              value: L1
+          triggers:
+            - uuid: 4d506b38bb86406d927304da8d11f5be
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.output.load.l1)>{$UPS.OUTPUT.LOAD.MAX.CRIT}'
+              name: 'Output L1: Load critical (>{$UPS.OUTPUT.LOAD.MAX.CRIT}%)'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: output
+            - uuid: f46294ca1fc04348901d4d6251ab652b
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.output.load.l1)>{$UPS.OUTPUT.LOAD.MAX.WARN} and last(/UPS SNMP Web Pro 3-Phase/ups.output.load.l1)<={$UPS.OUTPUT.LOAD.MAX.CRIT}'
+              name: 'Output L1: Load warning (>{$UPS.OUTPUT.LOAD.MAX.WARN}%)'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: output
+        - uuid: b43b272928f949209addd55c3d661301
+          name: 'Output: Load Level L2'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.4.4.1.5.2
+          key: ups.output.load.l2
+          delay: 60s
+          history: 30d
+          units: '%'
+          description: 'upsOutputPercentLoad phase 2'
+          tags:
+            - tag: component
+              value: output
+            - tag: phase
+              value: L2
+          triggers:
+            - uuid: 917346cb86b14195b416dbdc8e7d1b98
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.output.load.l2)>{$UPS.OUTPUT.LOAD.MAX.CRIT}'
+              name: 'Output L2: Load critical (>{$UPS.OUTPUT.LOAD.MAX.CRIT}%)'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: output
+            - uuid: c32fe15216b842359c86463b626a9486
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.output.load.l2)>{$UPS.OUTPUT.LOAD.MAX.WARN} and last(/UPS SNMP Web Pro 3-Phase/ups.output.load.l2)<={$UPS.OUTPUT.LOAD.MAX.CRIT}'
+              name: 'Output L2: Load warning (>{$UPS.OUTPUT.LOAD.MAX.WARN}%)'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: output
+        - uuid: aa998ee8c5c34b8982328715e3c8ec6c
+          name: 'Output: Load Level L3'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.4.4.1.5.3
+          key: ups.output.load.l3
+          delay: 60s
+          history: 30d
+          units: '%'
+          description: 'upsOutputPercentLoad phase 3'
+          tags:
+            - tag: component
+              value: output
+            - tag: phase
+              value: L3
+          triggers:
+            - uuid: 61b85947529d41ca9490bd03f0a886b4
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.output.load.l3)>{$UPS.OUTPUT.LOAD.MAX.CRIT}'
+              name: 'Output L3: Load critical (>{$UPS.OUTPUT.LOAD.MAX.CRIT}%)'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: output
+            - uuid: 3ba0d874a2e845d9b2232af47717a63b
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.output.load.l3)>{$UPS.OUTPUT.LOAD.MAX.WARN} and last(/UPS SNMP Web Pro 3-Phase/ups.output.load.l3)<={$UPS.OUTPUT.LOAD.MAX.CRIT}'
+              name: 'Output L3: Load warning (>{$UPS.OUTPUT.LOAD.MAX.WARN}%)'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: output
+        - uuid: fc8db4b5327545089ce4c94b9c0fcf3b
+          name: 'UPS: Output Source (Mode)'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.4.1.0
+          key: ups.output.source
+          delay: 60s
+          history: 30d
+          trends: 90d
+          description: |
+            upsOutputSource (RFC1628 — 1.3.6.1.2.1.33.1.4.1.0)
+            3 = Normal/Line Mode | 4 = Bypass | 5 = Battery | 6 = Booster | 7 = Reducer
+          tags:
+            - tag: component
+              value: status
+          triggers:
+            - uuid: 55973083ad9e4898ba769fd4ad2904ba
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.output.source)=4'
+              name: 'UPS: In bypass mode — no protection'
+              priority: HIGH
+              description: 'upsOutputSource = 4 (Bypass). No conditioning, no battery backup.'
+              tags:
+                - tag: scope
+                  value: power
+            - uuid: 11b45d0291fb4e05a3d9a7f22907d6ec
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.output.source)=5'
+              name: 'UPS: Running on battery (power failure)'
+              priority: HIGH
+              description: 'upsOutputSource = 5 (Battery). Grid power failure detected.'
+              tags:
+                - tag: scope
+                  value: power
+        - uuid: 9248225e4e6345dfb4514b21fcc6f0f9
+          name: 'Output: Voltage L1'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.4.4.1.2.1
+          key: ups.output.voltage.l1
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: V
+          description: 'upsOutputVoltage phase 1 — RMS Volts'
+          tags:
+            - tag: component
+              value: output
+            - tag: phase
+              value: L1
+        - uuid: 2b6d3e4bc1254ec885e0c583ff5fd32a
+          name: 'Output: Voltage L2'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.4.4.1.2.2
+          key: ups.output.voltage.l2
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: V
+          description: 'upsOutputVoltage phase 2 — RMS Volts'
+          tags:
+            - tag: component
+              value: output
+            - tag: phase
+              value: L2
+        - uuid: 361f7a6e0659401dab8b9bed03ceafb5
+          name: 'Output: Voltage L3'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.4.4.1.2.3
+          key: ups.output.voltage.l3
+          delay: 60s
+          history: 30d
+          value_type: FLOAT
+          units: V
+          description: 'upsOutputVoltage phase 3 — RMS Volts'
+          tags:
+            - tag: component
+              value: output
+            - tag: phase
+              value: L3
+        - uuid: c9a55f5af81149a08b649b3d8fd3103e
+          name: 'UPS: Temperature'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.33.1.2.7.0
+          key: ups.temperature
+          delay: 120s
+          history: 30d
+          value_type: FLOAT
+          units: °C
+          description: 'upsBatteryTemperature — UPS cabinet temperature'
+          tags:
+            - tag: component
+              value: environment
+          triggers:
+            - uuid: 62d2f203441a4c88ae2c0c5dea014e32
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.temperature)>{$UPS.TEMP.MAX.CRIT}'
+              name: 'UPS: Temperature critical (>{$UPS.TEMP.MAX.CRIT})'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: environment
+            - uuid: b905014881634a729627511affa35093
+              expression: 'last(/UPS SNMP Web Pro 3-Phase/ups.temperature)>{$UPS.TEMP.MAX.WARN} and last(/UPS SNMP Web Pro 3-Phase/ups.temperature)<={$UPS.TEMP.MAX.CRIT}'
+              name: 'UPS: Temperature warning (>{$UPS.TEMP.MAX.WARN})'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: environment
+      tags:
+        - tag: class
+          value: UPS
+      macros:
+        - macro: '{$SNMP_COMMUNITY}'
+          type: SECRET_TEXT
+          description: 'SNMP v2c community string — MUST be changed (Secret type)'
+        - macro: '{$UPS.BATTERY.CAPACITY.MIN.CRIT}'
+          value: '15'
+          description: 'Battery capacity critical threshold (%)'
+        - macro: '{$UPS.BATTERY.CAPACITY.MIN.WARN}'
+          value: '30'
+          description: 'Battery capacity warning threshold (%)'
+        - macro: '{$UPS.BATTERY.RUNTIME.MIN.CRIT}'
+          value: '5'
+          description: 'Estimated runtime critical threshold (minutes)'
+        - macro: '{$UPS.BATTERY.RUNTIME.MIN.WARN}'
+          value: '10'
+          description: 'Estimated runtime warning threshold (minutes)'
+        - macro: '{$UPS.INPUT.VOLTAGE.MAX.WARN}'
+          value: '253'
+          description: 'Input voltage maximum warning threshold (V)'
+        - macro: '{$UPS.INPUT.VOLTAGE.MIN.WARN}'
+          value: '200'
+          description: 'Input voltage minimum warning threshold (V)'
+        - macro: '{$UPS.OUTPUT.LOAD.MAX.CRIT}'
+          value: '95'
+          description: 'Output load critical threshold per phase (%)'
+        - macro: '{$UPS.OUTPUT.LOAD.MAX.WARN}'
+          value: '80'
+          description: 'Output load warning threshold per phase (%)'
+        - macro: '{$UPS.TEMP.MAX.CRIT}'
+          value: '50'
+          description: 'UPS temperature critical threshold (°C)'
+        - macro: '{$UPS.TEMP.MAX.WARN}'
+          value: '40'
+          description: 'UPS temperature warning threshold (°C)'
+  graphs:
+    - uuid: 73b2d18b16ac4f43b4d29e9bb73781eb
+      name: 'UPS: Battery Capacity and Runtime'
+      graph_items:
+        - color: 00AA00
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.battery.charge
+        - sortorder: '1'
+          color: 0000FF
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.battery.runtime
+    - uuid: 7837b299a97f4ea1acc6051151ce572f
+      name: 'UPS: Input Voltage 3 Phases'
+      graph_items:
+        - color: FF0000
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.input.voltage.l1
+        - sortorder: '1'
+          color: FF8800
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.input.voltage.l2
+        - sortorder: '2'
+          color: FFCC00
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.input.voltage.l3
+    - uuid: ae42acadc404414a8baa9a33f3cc0215
+      name: 'UPS: Output Current 3 Phases'
+      graph_items:
+        - color: '005500'
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.output.current.l1
+        - sortorder: '1'
+          color: '008800'
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.output.current.l2
+        - sortorder: '2'
+          color: 00BB00
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.output.current.l3
+    - uuid: 347ea731d71a4610a2c26c8752ce25cb
+      name: 'UPS: Output Load 3 Phases'
+      graph_items:
+        - color: AA0000
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.output.load.l1
+        - sortorder: '1'
+          color: DD4400
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.output.load.l2
+        - sortorder: '2'
+          color: FF8800
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.output.load.l3
+    - uuid: d7ebf310f9a542b4a354961a2176f2cc
+      name: 'UPS: Output Voltage 3 Phases'
+      graph_items:
+        - color: 0055AA
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.output.voltage.l1
+        - sortorder: '1'
+          color: 0088DD
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.output.voltage.l2
+        - sortorder: '2'
+          color: 00BBFF
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.output.voltage.l3
+    - uuid: 54273a53872d47f6852878667ca11638
+      name: 'UPS: Temperature'
+      graph_items:
+        - color: FF5500
+          item:
+            host: 'UPS SNMP Web Pro 3-Phase'
+            key: ups.temperature

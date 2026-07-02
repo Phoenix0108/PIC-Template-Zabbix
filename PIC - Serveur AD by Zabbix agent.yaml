@@ -1,0 +1,500 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: 846977d1dfed4968bc5f8bdb363285bc
+      name: 'Templates/Operating systems'
+  templates:
+    - uuid: cc9dd562c9dc41b2b62c6068021eefe9
+      template: 'PIC - Serveur AD by Zabbix agent'
+      name: 'PIC - Serveur AD by Zabbix agent'
+      description: |
+        Template 100% native (agent Zabbix seul, aucun script ni UserParameter a déployer) pour serveurs Windows assurant des rôles AD DS / DNS / DHCP / RDS / fichiers.
+        A LIER EN PLUS de la template Windows de base au niveau de l'hôte.
+        
+        COLLECTE : uniquement des clés agent intégrées (service.discovery, wmi.getall, perf_counter_en, eventlog, net.dns, net.tcp.service). Import + liaison, aucune macro obligatoire : le domaine AD est auto-découvert via WMI. Rien a installer sur le serveur.
+        
+        SECURITE BY DESIGN : aucun powershell.exe spawné, aucun repertoire de scripts inscriptible (surface d'elevation locale supprimee), agent stock. Lecture seule via le compte machine (LocalSystem). system.run reste inutile et desactive.
+        
+        REPLICATION (catch direct du scenario de desynchro) : signaux natifs via journal Directory Service (2042 = TSL depasse -> DISASTER ; 1864 = >24h -> alerte precoce ; 1311/1865/1925/1988 = KCC/lingering) + jauge DRA Pending. Pas de lecture live du Tombstone Lifetime ni de retard en secondes (necessitaient PowerShell) — voir la doc pour les ecarts assumes (occupation d'etendue DHCP, autorisation/failover DHCP).
+        
+        Version : 2.0.0 (native) — Zabbix 7.4
+      groups:
+        - name: 'Templates/Operating systems'
+      items:
+        - uuid: 1bf0e6922fb24483824c63391cac177d
+          name: 'AD DS : journal — DFS Replication SYSVOL (4012/5002/5008/2213)'
+          key: 'eventlog[DFS Replication,,,,"^(4012|5002|5008|2213)$",,skip]'
+          delay: 5m
+          history: 30d
+          value_type: LOG
+          description: 'Problèmes de réplication SYSVOL via DFSR (arrêt pour ancienneté, erreurs de connexion, base nécessitant resume 2213).'
+          tags:
+            - tag: component
+              value: sysvol
+          triggers:
+            - uuid: 752917cbe4bd4eeda4cf0ce9a3a080ec
+              expression: 'count(/PIC - Serveur AD by Zabbix agent/eventlog[DFS Replication,,,,"^(4012|5002|5008|2213)$",,skip],6h)>0'
+              name: 'AD DS : anomalie de réplication SYSVOL (DFSR) sur {HOST.NAME}'
+              priority: AVERAGE
+              manual_close: 'YES'
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 1ddbcdf6a026455fb646ae0df2b919f8
+          name: 'AD DS : journal — erreurs réplication/KCC/lingering (1311/1865/1925/1988)'
+          key: 'eventlog[Directory Service,,,,"^(1311|1865|1925|1988)$",,skip]'
+          delay: 5m
+          history: 30d
+          value_type: LOG
+          description: '1311/1865 topologie KCC incomplète, 1925 échec d''établissement de lien, 1988 lingering object.'
+          tags:
+            - tag: component
+              value: replication
+          triggers:
+            - uuid: d4be99d5aa0a43528410bd1afb542129
+              expression: 'count(/PIC - Serveur AD by Zabbix agent/eventlog[Directory Service,,,,"^(1311|1865|1925|1988)$",,skip],6h)>0'
+              name: 'AD DS : erreurs de réplication/KCC/lingering sur {HOST.NAME}'
+              priority: HIGH
+              manual_close: 'YES'
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: cec2322f1b0f4d03a7307c8c109d6c00
+          name: 'AD DS : journal — réplication tardive >24h (1864)'
+          key: 'eventlog[Directory Service,,,,"^1864$",,skip]'
+          delay: 5m
+          history: 30d
+          value_type: LOG
+          description: 'Événement 1864 (journalisé périodiquement par le KCC) : des DC n''ont pas répliqué dans les fenêtres 24h/7j/TSL. Alerte précoce avant 2042.'
+          tags:
+            - tag: component
+              value: replication
+          triggers:
+            - uuid: 3ded45b4816644818431591e809fc8fe
+              expression: 'count(/PIC - Serveur AD by Zabbix agent/eventlog[Directory Service,,,,"^1864$",,skip],2h)>0'
+              name: 'AD DS : DC non répliqué depuis >24h sur {HOST.NAME} (événement 1864)'
+              priority: AVERAGE
+              description: 'Alerte précoce : un ou plusieurs DC n''ont pas répliqué dans les fenêtres surveillées par le KCC.'
+              manual_close: 'YES'
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 5c51fdf5886c4c4f85154273e0a2e10e
+          name: 'AD DS : journal — Tombstone Lifetime dépassé (2042)'
+          key: 'eventlog[Directory Service,,,,"^2042$",,skip]'
+          delay: 5m
+          history: 30d
+          value_type: LOG
+          description: 'Événement 2042 : un DC n''a pas répliqué depuis plus que le Tombstone Lifetime. NE PAS le laisser rattraper (risque lingering objects).'
+          tags:
+            - tag: component
+              value: replication
+            - tag: scope
+              value: availability
+          triggers:
+            - uuid: 77e966cf0a4b44b99225866cc47a2608
+              expression: 'count(/PIC - Serveur AD by Zabbix agent/eventlog[Directory Service,,,,"^2042$",,skip],1d)>0'
+              name: 'AD DS : Tombstone Lifetime dépassé sur {HOST.NAME} (événement 2042)'
+              priority: DISASTER
+              description: 'Réplication absente depuis plus que le Tombstone Lifetime. NE PAS laisser rattraper : isoler, dater la dernière réplic par partenaire, nettoyage repadmin /removelingeringobjects OU démotion forcée + rebuild. Activer Strict Replication Consistency forêt-wide.'
+              manual_close: 'YES'
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: ff24ea98db96499cb05e4bb2459e7984
+          name: 'DNS : journal serveur — erreurs'
+          key: 'eventlog[DNS Server,,Error,,,,skip]'
+          delay: 5m
+          history: 30d
+          value_type: LOG
+          description: 'Erreurs du service DNS (échec de chargement de zone, etc.).'
+          tags:
+            - tag: component
+              value: dns
+          triggers:
+            - uuid: 57112e3e0e124bb9b085c457b55f755d
+              expression: 'count(/PIC - Serveur AD by Zabbix agent/eventlog[DNS Server,,Error,,,,skip],1h)>0'
+              name: 'DNS : erreurs dans le journal serveur sur {HOST.NAME}'
+              priority: AVERAGE
+              manual_close: 'YES'
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: dd639e134d024d60b881eef9dc2e2b02
+          name: 'AD DS : journal — verrouillages de compte (4740)'
+          key: 'eventlog[Security,,,,"^4740$",,skip]'
+          history: 30d
+          value_type: LOG
+          description: 'Événement 4740 (compte verrouillé). Signal IAM : brute force / password spray / compte de service mal configuré. Corréler 4625/4771 côté SIEM.'
+          tags:
+            - tag: component
+              value: security
+            - tag: scope
+              value: security
+          triggers:
+            - uuid: 454ff629d5f64066a68c924e55e9c247
+              expression: 'count(/PIC - Serveur AD by Zabbix agent/eventlog[Security,,,,"^4740$",,skip],10m)>{$AD.LOCKOUT.WARN}'
+              name: 'AD DS : pic de verrouillages de compte sur {HOST.NAME}'
+              priority: AVERAGE
+              description: 'Volume anormal de verrouillages 4740. Corréler 4625/4771 côté SIEM (brute force / password spray).'
+              manual_close: 'YES'
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: security
+        - uuid: a453a78bf6cb46ac84aa5f5cff8de77d
+          name: 'DNS : résolution externe (récursion)'
+          key: 'net.dns[,{$AD.DNS.EXT.PROBE},A,5,2]'
+          delay: 10m
+          history: 7d
+          trends: '0'
+          description: '1 si le nom public {$AD.DNS.EXT.PROBE} résout, 0 sinon. Teste récursion + forwarders.'
+          tags:
+            - tag: component
+              value: dns
+          triggers:
+            - uuid: d207aa31347a4fc28a9b17b535d46f32
+              expression: 'max(/PIC - Serveur AD by Zabbix agent/net.dns[,{$AD.DNS.EXT.PROBE},A,5,2],#3)=0'
+              recovery_mode: RECOVERY_EXPRESSION
+              recovery_expression: 'min(/PIC - Serveur AD by Zabbix agent/net.dns[,{$AD.DNS.EXT.PROBE},A,5,2],#2)=1'
+              name: 'DNS : résolution externe en échec sur {HOST.NAME}'
+              priority: AVERAGE
+              description: 'Récursion/forwarders en panne. Vérifier forwarders, root hints, sortie 53.'
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 1d340430ad934e2dabe603c264f668d6
+          name: 'AD DS : port LDAP (389) répond'
+          key: 'net.tcp.service[ldap]'
+          history: 7d
+          trends: '0'
+          description: '1 si le port LDAP 389 répond, 0 sinon.'
+          tags:
+            - tag: component
+              value: ldap
+            - tag: scope
+              value: availability
+        - uuid: 78ec66b0f4c941cd8f89a1fb50f87b94
+          name: 'DHCP : longueur de file active'
+          key: 'perf_counter_en["\DHCP Server\Active Queue Length"]'
+          delay: 5m
+          description: 'Backlog de traitement des requêtes DHCP.'
+          tags:
+            - tag: component
+              value: dhcp
+        - uuid: e21e11b6786a4da6b3a80d2c2b706a91
+          name: 'DHCP : Nacks/sec'
+          key: 'perf_counter_en["\DHCP Server\Nacks/sec"]'
+          delay: 5m
+          value_type: FLOAT
+          description: 'Hausse de NAK = conflits d''adressage / mauvaise configuration d''étendue.'
+          tags:
+            - tag: component
+              value: dhcp
+          triggers:
+            - uuid: 3012ae5d3e0743febb749c58016084dd
+              expression: 'avg(/PIC - Serveur AD by Zabbix agent/perf_counter_en["\DHCP Server\Nacks/sec"],15m)>{$DHCP.NACKS.WARN}'
+              name: 'DHCP : NAK soutenus sur {HOST.NAME}'
+              priority: AVERAGE
+              description: 'Conflits d''adressage / mauvaise config d''étendue.'
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 57cbf1a0522d4313a10a9a34ab86f1a7
+          name: 'AD DS : synchros de réplication en attente (DRA)'
+          key: 'perf_counter_en["\DirectoryServices(NTDS)\DRA Pending Replication Synchronizations"]'
+          delay: 5m
+          description: 'File d''attente de synchronisation entrante. Une valeur soutenue >0 = backlog de réplication.'
+          tags:
+            - tag: component
+              value: replication
+          triggers:
+            - uuid: 951da6976b86497f85d57c5892b18164
+              expression: 'min(/PIC - Serveur AD by Zabbix agent/perf_counter_en["\DirectoryServices(NTDS)\DRA Pending Replication Synchronizations"],30m)>{$AD.REPL.DRA.PENDING.WARN}'
+              name: 'AD DS : backlog de réplication soutenu sur {HOST.NAME}'
+              priority: AVERAGE
+              description: 'Synchros entrantes en attente de façon persistante. Vérifier repadmin /showrepl et la connectivité inter-DC.'
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: bf10701fcddf429c8dbaa84656e08cc1
+          name: 'AD DS : temps de bind LDAP'
+          key: 'perf_counter_en["\DirectoryServices(NTDS)\LDAP Bind Time"]'
+          units: ms
+          description: 'Latence de bind LDAP (ms). Indicateur de charge/santé LSASS.'
+          tags:
+            - tag: component
+              value: ldap
+            - tag: scope
+              value: performance
+          triggers:
+            - uuid: 44a04f7a667246948d6a1640da2b3f55
+              expression: 'avg(/PIC - Serveur AD by Zabbix agent/perf_counter_en["\DirectoryServices(NTDS)\LDAP Bind Time"],15m)>{$AD.LDAP.BIND.MS.WARN}'
+              name: 'AD DS : latence de bind LDAP élevée sur {HOST.NAME}'
+              priority: WARNING
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: performance
+        - uuid: 62a1751208914cf79f2084a7a4678b41
+          name: 'DNS : échecs de récursion/sec'
+          key: 'perf_counter_en["\DNS\Recursive Query Failure/sec"]'
+          delay: 5m
+          value_type: FLOAT
+          description: 'Hausse = forwarders/root hints injoignables.'
+          tags:
+            - tag: component
+              value: dns
+            - tag: scope
+              value: performance
+          triggers:
+            - uuid: 64be18a6d6ce4d85ba502bb7e7006e73
+              expression: 'avg(/PIC - Serveur AD by Zabbix agent/perf_counter_en["\DNS\Recursive Query Failure/sec"],15m)>{$DNS.RECURSION.FAIL.WARN}'
+              name: 'DNS : échecs de récursion soutenus sur {HOST.NAME}'
+              priority: WARNING
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: performance
+        - uuid: c75dac48937b427cb8698e63ae7adb87
+          name: 'Fichiers : fichiers ouverts'
+          key: 'perf_counter_en["\Server\Files Open"]'
+          delay: 5m
+          description: 'Fichiers actuellement ouverts via SMB.'
+          tags:
+            - tag: component
+              value: fileserver
+        - uuid: 3946903cd0ad4c309912a5714d9429bd
+          name: 'Fichiers : sessions SMB'
+          key: 'perf_counter_en["\Server\Server Sessions"]'
+          delay: 5m
+          description: 'Sessions SMB ouvertes (compteur Server).'
+          tags:
+            - tag: component
+              value: fileserver
+        - uuid: 7956081656eb4a45a57ad5e2b12c10f6
+          name: 'RDS : sessions actives'
+          key: 'perf_counter_en["\Terminal Services\Active Sessions"]'
+          delay: 5m
+          description: 'Sessions RDS actives.'
+          tags:
+            - tag: component
+              value: rds
+        - uuid: a099851f260e429badc04ce5b967eda6
+          name: 'RDS : sessions totales'
+          key: 'perf_counter_en["\Terminal Services\Total Sessions"]'
+          delay: 5m
+          description: 'Sessions RDS totales.'
+          tags:
+            - tag: component
+              value: rds
+        - uuid: 2f4d7d51d6024dbe9e389e710a01db41
+          name: 'Temps : décalage d''horloge calculé (W32Time)'
+          key: 'perf_counter_en["\Windows Time Service\Computed Time Offset"]'
+          value_type: FLOAT
+          description: |
+            Décalage d'horloge calculé par W32Time (perf_counter_en = compteur résolu en anglais, valide en locale FR).
+            UNITE BRUTE du compteur (µs selon version) : CALIBRER les seuils contre "w32tm /query /status". L'état du service W32Time est capté par le LLD services.
+          tags:
+            - tag: component
+              value: time
+            - tag: scope
+              value: availability
+          triggers:
+            - uuid: d4cbb8a5e2264a75a4ef2d410b3090c1
+              expression: 'abs(last(/PIC - Serveur AD by Zabbix agent/perf_counter_en["\Windows Time Service\Computed Time Offset"]))>{$W32TIME.OFFSET.RAW.DISASTER}'
+              name: 'Temps : décalage d''horloge critique (seuil Kerberos) sur {HOST.NAME}'
+              priority: HIGH
+              description: 'Décalage au-delà de la tolérance Kerberos. Vérifier la hiérarchie de temps, la source NTP du PDC emulator, qu''aucun DC ne synchronise sur Local CMOS Clock.'
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: 7a960037e96946a7a015d69bc3174503
+              expression: 'abs(last(/PIC - Serveur AD by Zabbix agent/perf_counter_en["\Windows Time Service\Computed Time Offset"]))>{$W32TIME.OFFSET.RAW.WARN}'
+              name: 'Temps : décalage d''horloge élevé sur {HOST.NAME}'
+              priority: AVERAGE
+              description: 'Dérive d''horloge. Approcher la tolérance Kerberos (MaxTolerance, 300s) casse l''authentification et fausse l''horodatage des logs (corrélation SIEM/forensic).'
+              dependencies:
+                - name: 'Windows: Zabbix agent is not available'
+                  expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 8a2e728e251a4969a2a4cfc49d96935a
+          name: 'AD DS : rôle du domaine (Win32 DomainRole)'
+          key: 'wmi.get[root\cimv2,"select DomainRole from Win32_ComputerSystem"]'
+          delay: 6h
+          trends: '0'
+          description: |
+            Rôle de la machine (Win32_ComputerSystem.DomainRole) : 0/2=autonome, 1/3=membre, 4=BDC, 5=PDC.
+            Sert à conditionner les contrôles spécifiques DC (ex. port LDAP 389) qui ne s'appliquent qu'aux DC (>=4).
+            Basé sur CIM, donc fiable même si LSASS est en panne (contrairement à un compteur NTDS).
+          tags:
+            - tag: component
+              value: adds
+      discovery_rules:
+        - uuid: e8dd1abd7e68445e82582dbacbc2dd40
+          name: 'Services de rôle Windows (découverte)'
+          key: service.discovery
+          delay: 1h
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: '{#SERVICE.NAME}'
+                value: '{$AD.SERVICE.MATCHES}'
+              - macro: '{#SERVICE.NAME}'
+                value: '{$AD.SERVICE.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+          description: 'Découvre les services de rôle (ADDS, DNS, DHCP, RDS, fichiers...) et alerte si un service censé tourner est arrêté. 100% natif, s''adapte aux rôles installés.'
+          item_prototypes:
+            - uuid: bb1596acb5c7466799fe5cad8d7aa4f4
+              name: 'Service [{#SERVICE.DISPLAYNAME}] : état'
+              key: 'service.info[{#SERVICE.NAME},state]'
+              history: 7d
+              trends: '0'
+              description: '0=running ... 6=stopped, 7=unknown, 255=inexistant.'
+              tags:
+                - tag: component
+                  value: service
+                - tag: scope
+                  value: availability
+              trigger_prototypes:
+                - uuid: 6651f72d1af44b9aaa6b034b01b5c56f
+                  expression: 'last(/PIC - Serveur AD by Zabbix agent/service.info[{#SERVICE.NAME},state])<>0 and last(/PIC - Serveur AD by Zabbix agent/service.info[{#SERVICE.NAME},state])<>255'
+                  name: 'Service de rôle arrêté : {#SERVICE.DISPLAYNAME} ({#SERVICE.NAME}) sur {HOST.NAME}'
+                  priority: AVERAGE
+                  description: 'Service de rôle non démarré. Vérifier services.msc et le journal système.'
+                  manual_close: 'YES'
+                  dependencies:
+                    - name: 'Windows: Zabbix agent is not available'
+                      expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+                  tags:
+                    - tag: scope
+                      value: availability
+        - uuid: 2f78dad5bfac496fa5432b9fd65f947c
+          name: 'Découverte du domaine AD (auto)'
+          key: 'wmi.getall[root\cimv2,"select Domain from Win32_ComputerSystem"]'
+          delay: 6h
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: '{#AD.DOMAIN}'
+                value: \.
+              - macro: '{#AD.DOMAIN}'
+                value: ^WORKGROUP$
+                operator: NOT_MATCHES_REGEX
+          description: |
+            Récupère le FQDN du domaine AD via WMI (Win32_ComputerSystem.Domain) et l'expose en macro LLD {#AD.DOMAIN}.
+            Aucune macro à renseigner : le domaine est découvert par l'agent lui-même.
+            Les machines en WORKGROUP (non jointes) sont exclues par le filtre.
+          item_prototypes:
+            - uuid: 1bc0198adc4946dcb12fb7560276cd03
+              name: 'AD DS : résolution SRV _msdcs ({#AD.DOMAIN})'
+              key: 'net.dns[,_ldap._tcp.dc._msdcs.{#AD.DOMAIN},SRV,5,3]'
+              delay: 5m
+              history: 7d
+              trends: '0'
+              description: '1 si _ldap._tcp.dc._msdcs.{#AD.DOMAIN} résout, 0 sinon. Domaine découvert automatiquement via WMI.'
+              tags:
+                - tag: component
+                  value: dns
+                - tag: scope
+                  value: availability
+              trigger_prototypes:
+                - uuid: f5fd08edd27846c2916e26fbb8b3adc2
+                  expression: 'max(/PIC - Serveur AD by Zabbix agent/net.dns[,_ldap._tcp.dc._msdcs.{#AD.DOMAIN},SRV,5,3],#4)=0'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'min(/PIC - Serveur AD by Zabbix agent/net.dns[,_ldap._tcp.dc._msdcs.{#AD.DOMAIN},SRV,5,3],#2)=1'
+                  name: 'AD DS : SRV _msdcs non résolus ({#AD.DOMAIN}) sur {HOST.NAME}'
+                  priority: DISASTER
+                  description: 'SRV de localisation de DC non résolus (3 mesures) pour {#AD.DOMAIN}. Authentification/jonction impossibles. Vérifier le service DNS et les zones _msdcs.'
+                  dependencies:
+                    - name: 'Windows: Zabbix agent is not available'
+                      expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+                  tags:
+                    - tag: scope
+                      value: availability
+          lld_macro_paths:
+            - lld_macro: '{#AD.DOMAIN}'
+              path: $.Domain
+      tags:
+        - tag: class
+          value: ADDS
+        - tag: target
+          value: 'windows server'
+      macros:
+        - macro: '{$AD.DNS.EXT.PROBE}'
+          value: www.microsoft.com
+          description: 'Nom public utilisé pour tester la récursion DNS sortante.'
+        - macro: '{$AD.LDAP.BIND.MS.WARN}'
+          value: '50'
+          description: 'Latence de bind LDAP (ms, moyenne 15 min) avant alerte.'
+        - macro: '{$AD.LOCKOUT.WARN}'
+          value: '5'
+          description: 'Verrouillages 4740 sur 10 min avant alerte.'
+        - macro: '{$AD.REPL.DRA.PENDING.WARN}'
+          value: '10'
+          description: 'Backlog DRA soutenu (min sur 30 min) avant alerte.'
+        - macro: '{$AD.SERVICE.MATCHES}'
+          value: ^(NTDS|Netlogon|Kdc|IsmServ|DFSR|Dfs|ADWS|W32Time|DNS|DHCPServer|TermService|SessionEnv|UmRdpService|TScPubRPC|RDMS|Tssdis|TSGateway|TermServLicensing|LanmanServer|srmsvc|MSDTC)$
+          description: 'Regex des noms courts de services de rôle supervisés.'
+        - macro: '{$AD.SERVICE.NOT_MATCHES}'
+          value: ^$
+          description: 'Regex d''exclusion (par défaut n''exclut rien).'
+        - macro: '{$DHCP.NACKS.WARN}'
+          value: '1'
+          description: 'NAK/sec (moyenne 15 min) avant alerte.'
+        - macro: '{$DNS.RECURSION.FAIL.WARN}'
+          value: '5'
+          description: 'Échecs de récursion/sec (moyenne 15 min) avant alerte.'
+        - macro: '{$W32TIME.OFFSET.RAW.DISASTER}'
+          value: '300000000'
+          description: 'Seuil HIGH décalage horloge (hypothèse µs => 300s = tolérance Kerberos). A CALIBRER.'
+        - macro: '{$W32TIME.OFFSET.RAW.WARN}'
+          value: '30000000'
+          description: 'Seuil AVERAGE décalage horloge (valeur BRUTE, hypothèse µs => 30s). A CALIBRER.'
+  triggers:
+    - uuid: 5cc91f2e4ef34657bd4ddfaeafe47428
+      expression: 'last(/PIC - Serveur AD by Zabbix agent/net.tcp.service[ldap])=0 and last(/PIC - Serveur AD by Zabbix agent/wmi.get[root\cimv2,"select DomainRole from Win32_ComputerSystem"])>=4'
+      name: 'AD DS : port LDAP 389 injoignable sur {HOST.NAME}'
+      priority: HIGH
+      description: 'Le port LDAP 389 ne répond pas sur un contrôleur de domaine (DomainRole >= 4). AD DS non opérationnel : ni logon ni requête annuaire sur ce DC. Vérifier LSASS/NTDS et le pare-feu local.'
+      dependencies:
+        - name: 'Windows: Zabbix agent is not available'
+          expression: 'max(/PIC Windows by Zabbix agent/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0'
+      tags:
+        - tag: scope
+          value: availability

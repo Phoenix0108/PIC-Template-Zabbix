@@ -1,0 +1,767 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: a1b2c3d4e5f64789a1234567890abcd1
+      name: 'PIC informatique - Template'
+    - uuid: 52e6b217bd404812acf56f4bcd08942f
+      name: Templates/Storage
+  templates:
+    - uuid: 9967353b10b84d288e52c9f0629e21f7
+      template: 'PIC - NAS Fujitsu by SNMP'
+      name: 'PIC - NAS Fujitsu by SNMP'
+      description: |
+        Template de monitoring pour NAS Fujitsu (CELVIN, ETERNUS NR, etc.)
+        Protocole : SNMP v2c
+        Auteur     : PIC informatique
+        Version    : 2.0 — Zabbix 7.4
+      groups:
+        - name: 'PIC informatique - Template'
+        - name: Templates/Storage
+      items:
+        - uuid: cc20e31ccdb4466ea2a7fa6635e6f157
+          name: 'ICMP Ping'
+          type: SIMPLE
+          key: icmpping
+          delay: 60s
+          history: 90d
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: 6cd1bfc242134ccb93a7593ceab07999
+              expression: 'max(/PIC - NAS Fujitsu by SNMP/icmpping,5m)=0'
+              name: '{HOST.NAME} is unreachable'
+              priority: HIGH
+        - uuid: 41cab0db9c1c4964bbbd6ca911b38659
+          name: 'ICMP Loss'
+          type: SIMPLE
+          key: icmppingloss
+          delay: 60s
+          history: 90d
+          units: '%'
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: 8052f4e8c41940b98f7386376292f0d7
+              expression: 'min(/PIC - NAS Fujitsu by SNMP/icmppingloss,5m)>20'
+              name: 'Packet loss HIGH on {HOST.NAME}'
+              priority: WARNING
+        - uuid: e93a38bf34974554829fe50a695f15bd
+          name: 'ICMP Response Time'
+          type: SIMPLE
+          key: icmppingsec
+          delay: 60s
+          history: 90d
+          units: ms
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1000'
+          tags:
+            - tag: Application
+              value: 'System Health'
+        - uuid: bef5025d9cfd44fcb9df6068c38848d1
+          name: 'Number of Processes'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.25.1.6.0
+          key: 'proc.num[hrSystemProcesses]'
+          delay: 60s
+          history: 90d
+          tags:
+            - tag: Application
+              value: 'System Health'
+        - uuid: 27fea0be3deb46bbbf57a2409d1a8609
+          name: 'CPU Fan Status'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.13.16.3.1.3.1
+          key: 'sensor.fan.speed[lmFanSensorsValue.1]'
+          delay: 60s
+          history: 90d
+          units: rpm
+          tags:
+            - tag: Application
+              value: CPU
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: 396e9c86952c4b03b311a472cf50ed14
+              expression: 'last(/PIC - NAS Fujitsu by SNMP/sensor.fan.speed[lmFanSensorsValue.1])<200 and last(/PIC - NAS Fujitsu by SNMP/sensor.fan.speed[lmFanSensorsValue.1])>0'
+              name: 'CPU Fan CRITICAL on {HOST.NAME}'
+              status: DISABLED
+              priority: HIGH
+        - uuid: 08009a7c1cd5406497c7a95df1f8a02f
+          name: 'System Fan Status'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.13.16.3.1.3.2
+          key: 'sensor.fan.speed[lmFanSensorsValue.2]'
+          delay: 60s
+          history: 90d
+          units: rpm
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: a3c073ab7f574359a9ce19aefdf4d572
+              expression: 'last(/PIC - NAS Fujitsu by SNMP/sensor.fan.speed[lmFanSensorsValue.2])<200 and last(/PIC - NAS Fujitsu by SNMP/sensor.fan.speed[lmFanSensorsValue.2])>0'
+              name: 'System Fan Status CRITICAL on {HOST.NAME}'
+              status: DISABLED
+              priority: WARNING
+        - uuid: 27cce2ee737741d38a2ec5925cbc7ab7
+          name: 'System Temperature'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.13.16.2.1.3.1
+          key: 'sensor.temp.value[lmTempSensorsValue.1]'
+          delay: 3m
+          history: 90d
+          units: °C
+          description: 'Température du châssis (LM-SENSORS-MIB). Valeur en milliceligrade convertie en °C.'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.001'
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: aaf740145bd54d13832040b22c6bca41
+              expression: 'avg(/PIC - NAS Fujitsu by SNMP/sensor.temp.value[lmTempSensorsValue.1],#4)>{$TEMP_CRIT}'
+              name: 'System Temperature CRITICAL on {HOST.NAME}'
+              status: DISABLED
+              priority: AVERAGE
+        - uuid: e751213d2e744cfa895e8d36e6d4997b
+          name: 'CPU Temperature'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.13.16.2.1.3.2
+          key: 'sensor.temp.value[lmTempSensorsValue.2]'
+          delay: 3m
+          history: 90d
+          units: °C
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.001'
+          tags:
+            - tag: Application
+              value: 'System Health'
+        - uuid: d922d04901cc45d682fbe813b8534c55
+          name: 'CPU Idle'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.11.11.0
+          key: 'system.cpu.idle[ssCpuIdle]'
+          delay: 60s
+          history: 90d
+          units: '%'
+          description: 'Pourcentage de temps CPU passé en idle (calculé sur la dernière minute).'
+          tags:
+            - tag: Application
+              value: CPU
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: baaac96b26d1401e8a7953cfea000a1d
+              expression: 'avg(/PIC - NAS Fujitsu by SNMP/system.cpu.idle[ssCpuIdle],1h)<30'
+              name: 'CPU Usage High on {HOST.NAME}'
+              status: DISABLED
+              priority: WARNING
+            - uuid: e4866fd87391424e9dcf21cd789ffb04
+              expression: 'avg(/PIC - NAS Fujitsu by SNMP/system.cpu.idle[ssCpuIdle],2h)<10'
+              name: 'CPU Usage Very High on {HOST.NAME}'
+              status: DISABLED
+              priority: HIGH
+        - uuid: b0616aa835324cbb8bf0824426f46764
+          name: 'Load Avg 1 min'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.10.1.5.1
+          key: 'system.cpu.load[laLoadInt.1]'
+          delay: 60s
+          history: 90d
+          value_type: FLOAT
+          description: 'Load average 1 minute.'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+          tags:
+            - tag: Application
+              value: CPU
+            - tag: Application
+              value: 'System Health'
+        - uuid: 940fb0f2f53345c9ab664bfe8a9bb58c
+          name: 'Load Avg 5 min'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.10.1.5.2
+          key: 'system.cpu.load[laLoadInt.2]'
+          delay: 60s
+          history: 90d
+          value_type: FLOAT
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+          tags:
+            - tag: Application
+              value: CPU
+        - uuid: d7d687ca30e84993b2caebc4ad017255
+          name: 'Load Avg 15 min'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.10.1.5.3
+          key: 'system.cpu.load[laLoadInt.3]'
+          delay: 60s
+          history: 90d
+          value_type: FLOAT
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+          tags:
+            - tag: Application
+              value: CPU
+        - uuid: 95819d555f4f4b839b1be71fe2d74b73
+          name: 'CPU System'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.11.10.0
+          key: 'system.cpu.system[ssCpuSystem]'
+          delay: 60s
+          history: 90d
+          units: '%'
+          tags:
+            - tag: Application
+              value: CPU
+            - tag: Application
+              value: 'System Health'
+        - uuid: 483bccd902944b07852a5e27695f064d
+          name: 'CPU User'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.11.9.0
+          key: 'system.cpu.user[ssCpuUser]'
+          delay: 60s
+          history: 90d
+          units: '%'
+          tags:
+            - tag: Application
+              value: CPU
+            - tag: Application
+              value: 'System Health'
+        - uuid: c0b68ccfb86a4567a09e03e4e0d30dce
+          name: 'Model Name'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.1.1.0
+          key: 'system.descr[sysDescr.0]'
+          delay: 1h
+          history: 90d
+          value_type: TEXT
+          inventory_link: MODEL
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: a3883b9bb2f74289924d5d47bb0eba71
+          name: 'Serial Number / Hostname'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.1.5.0
+          key: 'system.hostname[sysName.0]'
+          delay: 1h
+          history: 90d
+          value_type: TEXT
+          inventory_link: SERIALNO_A
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: 43d9420151664de4acc8cb4bc9534ba5
+          name: 'System Status'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.25.1.1.0
+          key: 'system.status[hrSystemUptime.0]'
+          delay: 60s
+          history: 90d
+          tags:
+            - tag: Application
+              value: 'System Health'
+        - uuid: af6157a3bd3d4a0bbe0d5ee5b27f1f51
+          name: 'System Uptime'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.1.3.0
+          key: 'system.uptime[sysUpTime.0]'
+          delay: 60s
+          history: 90d
+          units: uptime
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: c367f98f63ce4f64848176beced35a22
+              expression: 'last(/PIC - NAS Fujitsu by SNMP/system.uptime[sysUpTime.0])<600'
+              name: 'System restarted recently on {HOST.NAME}'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: 86f71c86da294a4e9e0d41b0ac29089a
+          name: 'Number of Users'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.25.1.5.0
+          key: 'system.users.num[hrSystemNumUsers]'
+          delay: 60s
+          history: 90d
+          tags:
+            - tag: Application
+              value: 'System Health'
+        - uuid: 10f57537add142fcb10b1a151d725e83
+          name: 'Total Physical Available'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.4.6.0
+          key: ucdavis.memory.memAvailReal
+          delay: 3m
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: Application
+              value: Memory
+            - tag: Application
+              value: 'System Health'
+        - uuid: a3c512027ba94d84bdc39dadd8d429f2
+          name: 'Total Swap Available'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.4.4.0
+          key: ucdavis.memory.memAvailSwap
+          delay: 3m
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: Application
+              value: Memory
+            - tag: Application
+              value: 'System Health'
+        - uuid: 642c7dde48db4cca9b163d683cfcdf17
+          name: 'Total Buffer Memory'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.4.14.0
+          key: ucdavis.memory.memBuffer
+          delay: 3m
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: Application
+              value: Memory
+            - tag: Application
+              value: 'System Health'
+        - uuid: 7a4588f7306241fbb67d2c66a3035a76
+          name: 'Total Cached Memory'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.4.15.0
+          key: ucdavis.memory.memCached
+          delay: 3m
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: Application
+              value: Memory
+            - tag: Application
+              value: 'System Health'
+        - uuid: b1e8cbe71fbb446c9d3e1346dc104b54
+          name: 'Total Free Memory'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.4.11.0
+          key: ucdavis.memory.memTotalFree
+          delay: 3m
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: Application
+              value: Memory
+            - tag: Application
+              value: 'System Health'
+        - uuid: ee40b0ed19be485286e4c760fc378573
+          name: 'Total Physical Memory'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.4.5.0
+          key: ucdavis.memory.memTotalReal
+          delay: 3m
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: Application
+              value: Memory
+            - tag: Application
+              value: 'System Health'
+        - uuid: baf9121b8a984657a3103a7392b9454b
+          name: 'Total Swap Space'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.2021.4.3.0
+          key: ucdavis.memory.memTotalSwap
+          delay: 3m
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: Application
+              value: Memory
+            - tag: Application
+              value: 'System Health'
+      discovery_rules:
+        - uuid: 72007944e903411790ae3fd775ddca14
+          name: 'Physical Disk(s)'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},.1.3.6.1.2.1.25.3.2.1.3]'
+          key: host.hrDevice.hrDiskStorageTable
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: fe26c5cb2c8341c3876af54e3b008c5e
+              name: '{#SNMPVALUE} Status'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.2.1.25.3.2.1.5.{#SNMPINDEX}'
+              key: 'hrDevice.hrDeviceStatus.[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              description: '[1] unknown  [2] running  [3] warning  [4] testing  [5] down'
+              valuemap:
+                name: 'HOST-RESOURCES-MIB::hrDeviceStatus'
+              tags:
+                - tag: Application
+                  value: Disk
+              trigger_prototypes:
+                - uuid: af22969d414e4b7c91ac331147616c22
+                  expression: 'last(/PIC - NAS Fujitsu by SNMP/hrDevice.hrDeviceStatus.[{#SNMPINDEX}])=3'
+                  name: '{#SNMPVALUE} disk in WARNING state'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+                - uuid: 5a5f7f553db34c8e80df17fe41d130c8
+                  expression: 'last(/PIC - NAS Fujitsu by SNMP/hrDevice.hrDeviceStatus.[{#SNMPINDEX}])=5'
+                  name: '{#SNMPVALUE} disk is DOWN'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+        - uuid: 475e4fd16e1f42aca31f7d5f16fbd6fc
+          name: Disk
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFINDEX},.1.3.6.1.2.1.25.2.3.1.1,{#IFDESCR},.1.3.6.1.2.1.25.2.3.1.3,{#IFUNIT},.1.3.6.1.2.1.25.2.3.1.4]'
+          key: host.hrStorage.hrStorageTable.hrStorageEntry
+          delay: 1h
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: /
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: c99ce729204f4f16b381e30bb72e9b91
+              name: 'Storage Size on {#IFDESCR}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.2.1.25.2.3.1.5.{#IFINDEX}'
+              key: 'host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageSize[{#IFINDEX}]'
+              delay: 3m
+              history: 90d
+              units: B
+              preprocessing:
+                - type: MULTIPLIER
+                  parameters:
+                    - '{#IFUNIT}'
+              tags:
+                - tag: Application
+                  value: Disk
+            - uuid: e0e27967160a46629dc745d70e4cdb04
+              name: 'Storage Used on {#IFDESCR} (%)'
+              type: CALCULATED
+              key: 'host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageUsed[{#IFINDEX},pct]'
+              delay: 5m
+              history: 90d
+              units: '%'
+              params: 'last(//host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageUsed[{#IFINDEX}])/last(//host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageSize[{#IFINDEX}])*100'
+              tags:
+                - tag: Application
+                  value: Disk
+              trigger_prototypes:
+                - uuid: 5f0d6ee3ad414198b944989407a836c0
+                  expression: 'min(/PIC - NAS Fujitsu by SNMP/host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageUsed[{#IFINDEX},pct],6h)>{$DISK_UTIL_HIGH}'
+                  name: 'Disk Space is CRITICAL on {#IFDESCR}'
+                  priority: HIGH
+                - uuid: b7ca3a7e28fc486bb88f0de71184cc82
+                  expression: 'min(/PIC - NAS Fujitsu by SNMP/host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageUsed[{#IFINDEX},pct],6h)>{$DISK_UTIL_WARN}'
+                  name: 'Disk Space is LOW on {#IFDESCR}'
+                  status: DISABLED
+                  priority: WARNING
+                  dependencies:
+                    - name: 'Disk Space is CRITICAL on {#IFDESCR}'
+                      expression: 'min(/PIC - NAS Fujitsu by SNMP/host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageUsed[{#IFINDEX},pct],6h)>{$DISK_UTIL_HIGH}'
+            - uuid: 75c9684b047c4c7981874745952345d3
+              name: 'Storage Used on {#IFDESCR}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.2.1.25.2.3.1.6.{#IFINDEX}'
+              key: 'host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageUsed[{#IFINDEX}]'
+              delay: 3m
+              history: 90d
+              units: B
+              preprocessing:
+                - type: MULTIPLIER
+                  parameters:
+                    - '{#IFUNIT}'
+              tags:
+                - tag: Application
+                  value: Disk
+          graph_prototypes:
+            - uuid: f410eb1ec9ea454284854acf9f2f0873
+              name: 'Disk: Storage Evolution on {#IFDESCR}'
+              height: '300'
+              graph_items:
+                - color: '000000'
+                  calc_fnc: ALL
+                  item:
+                    host: 'PIC - NAS Fujitsu by SNMP'
+                    key: 'host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageSize[{#IFINDEX}]'
+                - sortorder: '1'
+                  drawtype: FILLED_REGION
+                  color: 0000EE
+                  item:
+                    host: 'PIC - NAS Fujitsu by SNMP'
+                    key: 'host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageUsed[{#IFINDEX}]'
+            - uuid: 5e2a9d26e7c04cdba320f631085027ae
+              name: 'Disk: Storage Utilization on {#IFDESCR}'
+              width: '600'
+              height: '340'
+              yaxismax: '0'
+              show_work_period: 'NO'
+              show_triggers: 'NO'
+              type: PIE
+              show_3d: 'YES'
+              graph_items:
+                - color: 5B5B5B
+                  calc_fnc: LAST
+                  type: GRAPH_SUM
+                  item:
+                    host: 'PIC - NAS Fujitsu by SNMP'
+                    key: 'host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageSize[{#IFINDEX}]'
+                - sortorder: '1'
+                  color: AEEE00
+                  calc_fnc: LAST
+                  item:
+                    host: 'PIC - NAS Fujitsu by SNMP'
+                    key: 'host.hrStorage.hrStorageTable.hrStorageEntry.hrStorageUsed[{#IFINDEX}]'
+        - uuid: 5c553445c95244a8bd0d8f1108d5a04a
+          name: Network
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFALIAS},1.3.6.1.2.1.31.1.1.1.18,{#IFNAME},1.3.6.1.2.1.31.1.1.1.1]'
+          key: ifMIB.ifMIBObjects.ifXTable.ifXEntry
+          delay: 1h
+          filter:
+            conditions:
+              - macro: '{#IFNAME}'
+                value: eth
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: 969bc220d5704a079343e4e76a21d7e1
+              name: 'Incoming Packets on Interface {#IFNAME}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.2.1.31.1.1.1.6.{#SNMPINDEX}'
+              key: 'ifMIB.ifMIBObjects.ifXTable.ifXEntry.ifHCInOctets.[{#IFNAME}]'
+              delay: 3m
+              history: 90d
+              value_type: FLOAT
+              units: bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              tags:
+                - tag: Application
+                  value: Network
+            - uuid: 4480f3983d604260815175a67ffcbb48
+              name: 'Outgoing Packets on Interface {#IFNAME}'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.2.1.31.1.1.1.10.{#SNMPINDEX}'
+              key: 'ifMIB.ifMIBObjects.ifXTable.ifXEntry.ifHCOutOctets.[{#IFNAME}]'
+              delay: 3m
+              history: 90d
+              value_type: FLOAT
+              units: bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              tags:
+                - tag: Application
+                  value: Network
+            - uuid: b5fba6f4af024d4c9613309c91cbd95a
+              name: 'Interface {#IFNAME} Status'
+              type: SNMP_AGENT
+              snmp_oid: '.1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+              key: 'net.if.status[ifOperStatus.{#IFNAME}]'
+              delay: 60s
+              history: 90d
+              valuemap:
+                name: 'IF-MIB::ifOperStatus'
+              tags:
+                - tag: Application
+                  value: Network
+          graph_prototypes:
+            - uuid: 10265587547f4d668242c01f94fa33ea
+              name: 'Network: Traffic on Interface {#IFNAME}'
+              graph_items:
+                - drawtype: GRADIENT_LINE
+                  color: 00AA00
+                  item:
+                    host: 'PIC - NAS Fujitsu by SNMP'
+                    key: 'ifMIB.ifMIBObjects.ifXTable.ifXEntry.ifHCInOctets.[{#IFNAME}]'
+                - sortorder: '1'
+                  drawtype: GRADIENT_LINE
+                  color: 3333FF
+                  item:
+                    host: 'PIC - NAS Fujitsu by SNMP'
+                    key: 'ifMIB.ifMIBObjects.ifXTable.ifXEntry.ifHCOutOctets.[{#IFNAME}]'
+      tags:
+        - tag: class
+          value: storage
+        - tag: target
+          value: NAS
+      macros:
+        - macro: '{$DISK_UTIL_HIGH}'
+          value: '95'
+          description: 'Seuil critique espace disque (%)'
+        - macro: '{$DISK_UTIL_WARN}'
+          value: '85'
+          description: 'Seuil d''alerte espace disque (%)'
+        - macro: '{$SNMP_COMMUNITY}'
+          value: picinformatique
+          description: 'Communauté SNMP v2c'
+        - macro: '{$TEMP_CRIT}'
+          value: '60'
+          description: 'Température critique (°C)'
+      valuemaps:
+        - uuid: ee86e4adbb0a42b5bb0cf6387534e512
+          name: 'HOST-RESOURCES-MIB::hrDeviceStatus'
+          mappings:
+            - value: '1'
+              newvalue: unknown
+            - value: '2'
+              newvalue: running
+            - value: '3'
+              newvalue: warning
+            - value: '4'
+              newvalue: testing
+            - value: '5'
+              newvalue: down
+        - uuid: 337f6dce14f84968b17c7ac262b4da3b
+          name: 'IF-MIB::ifOperStatus'
+          mappings:
+            - value: '1'
+              newvalue: up
+            - value: '2'
+              newvalue: down
+            - value: '3'
+              newvalue: testing
+            - value: '4'
+              newvalue: unknown
+            - value: '5'
+              newvalue: dormant
+            - value: '6'
+              newvalue: notPresent
+            - value: '7'
+              newvalue: lowerLayerDown
+  graphs:
+    - uuid: c891ce48649843d2a4edd2618206edb3
+      name: 'CPU: Idle System User'
+      height: '300'
+      graph_items:
+        - drawtype: BOLD_LINE
+          color: 1A7C11
+          calc_fnc: ALL
+          item:
+            host: 'PIC - NAS Fujitsu by SNMP'
+            key: 'system.cpu.idle[ssCpuIdle]'
+        - sortorder: '1'
+          color: F63100
+          calc_fnc: ALL
+          item:
+            host: 'PIC - NAS Fujitsu by SNMP'
+            key: 'system.cpu.system[ssCpuSystem]'
+        - sortorder: '2'
+          color: 2774A4
+          calc_fnc: ALL
+          item:
+            host: 'PIC - NAS Fujitsu by SNMP'
+            key: 'system.cpu.user[ssCpuUser]'
+    - uuid: 409d5ff766c7415fbc6210c88e008e14
+      name: 'Memory: Physical Memory (Exploded)'
+      width: '600'
+      height: '340'
+      yaxismax: '0'
+      show_work_period: 'NO'
+      show_triggers: 'NO'
+      type: EXPLODED
+      show_3d: 'YES'
+      graph_items:
+        - color: 6C59DC
+          calc_fnc: LAST
+          type: GRAPH_SUM
+          item:
+            host: 'PIC - NAS Fujitsu by SNMP'
+            key: ucdavis.memory.memTotalReal
+        - sortorder: '1'
+          color: EEEE00
+          calc_fnc: LAST
+          item:
+            host: 'PIC - NAS Fujitsu by SNMP'
+            key: ucdavis.memory.memAvailReal
+    - uuid: 4f5ff61341634c5ca606093442164d54
+      name: 'Memory: Swap Memory (Exploded)'
+      width: '600'
+      height: '340'
+      yaxismax: '0'
+      show_work_period: 'NO'
+      show_triggers: 'NO'
+      type: EXPLODED
+      show_3d: 'YES'
+      graph_items:
+        - color: A54F10
+          calc_fnc: LAST
+          type: GRAPH_SUM
+          item:
+            host: 'PIC - NAS Fujitsu by SNMP'
+            key: ucdavis.memory.memTotalSwap
+        - sortorder: '1'
+          color: 2774A4
+          calc_fnc: LAST
+          item:
+            host: 'PIC - NAS Fujitsu by SNMP'
+            key: ucdavis.memory.memAvailSwap
+    - uuid: d9841a2259ef424b94ef79f472691fc5
+      name: 'System: Temperature'
+      graph_items:
+        - drawtype: FILLED_REGION
+          color: 2774A4
+          calc_fnc: ALL
+          item:
+            host: 'PIC - NAS Fujitsu by SNMP'
+            key: 'sensor.temp.value[lmTempSensorsValue.1]'
