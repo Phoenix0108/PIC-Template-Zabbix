@@ -23,6 +23,35 @@
 
 Template d'espace disque
 
+## Installation & configuration
+
+## Surveillance de disponibilité (corrélation SNMP / ICMP)
+
+Le template surveille la disponibilité du NAS via deux sources portées
+par le template lui-même (aucun template ICMP externe requis) :
+
+- `zabbix[host,snmp,available]` : disponibilité de la collecte SNMP.
+- `icmpping` : ping ICMP (Simple check) vers l'IP de l'interface du NAS.
+
+Deux déclencheurs corrélés, mutuellement exclusifs :
+
+| Situation | Déclencheur | Sévérité |
+|---|---|---|
+| SNMP en échec > `{$SNMP_UNAVAIL_WARN}` mais NAS joignable en ICMP | SNMP inaccessible mais NAS joignable en ICMP | Average |
+| SNMP en échec ET ICMP en échec | NAS indisponible (SNMP et ICMP en échec) | High |
+
+L'alerte Average dépend de la High : lors d'une panne totale, seule
+l'alerte High « NAS indisponible » reste active (pas de doublon).
+
+### Prérequis
+Le ping ICMP est fourni par ce template. Pour éviter un conflit de clé
+`icmpping`, **ne pas lier « Template Module ICMP Ping »** aux hôtes qui
+utilisent ce template (le délier s'il est déjà présent).
+
+### Configuration
+Ajuster si besoin `{$SNMP_UNAVAIL_WARN}` (durée d'indisponibilité SNMP
+continue avant alerte) et `{$SNMP_COMMUNITY}`.
+
 ## Macros
 
 | Macro | Valeur par défaut | Description |
