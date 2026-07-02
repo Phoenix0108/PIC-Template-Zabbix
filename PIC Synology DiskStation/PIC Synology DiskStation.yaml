@@ -17,6 +17,41 @@ zabbix_export:
         - name: Synology
         - name: Templates
       items:
+        - uuid: 6b34e6c43e8048208ea99c29675f71be
+          name: 'SNMP agent availability'
+          type: INTERNAL
+          key: 'zabbix[host,snmp,available]'
+          history: 90d
+          description: |
+            Disponibilité de la collecte SNMP sur l'hôte.
+            0 - injoignable, 1 - disponible, 2 - inconnu.
+          tags:
+            - tag: Application
+              value: 'Synology System'
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: 472ba1f179ea4e4bb36cd0a06fc154e7
+              expression: 'max(/PIC Synology DiskStation/zabbix[host,snmp,available],{$SNMP_UNAVAIL_WARN})=0'
+              name: 'Synology: NAS injoignable en SNMP (>{$SNMP_UNAVAIL_WARN})'
+              event_name: 'Synology: NAS {HOST.NAME} injoignable en SNMP depuis plus de {$SNMP_UNAVAIL_WARN}'
+              priority: AVERAGE
+              description: 'Le NAS ne répond plus aux requêtes SNMP depuis plus de {$SNMP_UNAVAIL_WARN}, alors que la collecte SNMP fonctionnait auparavant.'
+              dependencies:
+                - name: 'Synology: NAS injoignable en SNMP (>{$SNMP_UNAVAIL_HIGH})'
+                  expression: 'max(/PIC Synology DiskStation/zabbix[host,snmp,available],{$SNMP_UNAVAIL_HIGH})=0'
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: aec1a7b74ced44178fcf058af107d660
+              expression: 'max(/PIC Synology DiskStation/zabbix[host,snmp,available],{$SNMP_UNAVAIL_HIGH})=0'
+              name: 'Synology: NAS injoignable en SNMP (>{$SNMP_UNAVAIL_HIGH})'
+              event_name: 'Synology: NAS {HOST.NAME} injoignable en SNMP depuis plus de {$SNMP_UNAVAIL_HIGH}'
+              priority: HIGH
+              description: 'Le NAS ne répond plus aux requêtes SNMP depuis plus de {$SNMP_UNAVAIL_HIGH}, alors que la collecte SNMP fonctionnait auparavant.'
+              tags:
+                - tag: scope
+                  value: availability
         - uuid: 8b8f40bcca5a49a5a6def3dd5f53190f
           name: 'CPU Fan Status'
           type: SNMP_AGENT
@@ -1186,6 +1221,12 @@ zabbix_export:
           value: '85'
         - macro: '{$SNMP_COMMUNITY}'
           value: picinformatique
+        - macro: '{$SNMP_UNAVAIL_WARN}'
+          value: 5m
+          description: 'Durée d''indisponibilité SNMP continue déclenchant une alerte de niveau Average.'
+        - macro: '{$SNMP_UNAVAIL_HIGH}'
+          value: 10m
+          description: 'Durée d''indisponibilité SNMP continue déclenchant une alerte de niveau High.'
       valuemaps:
         - uuid: 19e39ef8c4324498824fa535cb0dd924
           name: 'SYNOLOGY-DISK-MIB::diskHealthStatus'

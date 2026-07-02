@@ -11,11 +11,11 @@
 | Version Zabbix | 7.4 |
 | Fichier | `PIC Synology DiskStation.yaml` |
 | Groupes | PIC informatique - Template, Synology, Templates |
-| Éléments (items) | 23 |
+| Éléments (items) | 24 |
 | Règles de découverte | 9 |
 | Prototypes d'éléments | 35 |
-| Déclencheurs | 8 |
-| Macros | 3 |
+| Déclencheurs | 10 |
+| Macros | 5 |
 | Cartographies de valeurs | 6 |
 | Tableaux de bord | 0 |
 
@@ -30,6 +30,8 @@ Template d'espace disque
 | `{$DISK_UTIL_HIGH}` | 95 |  |
 | `{$DISK_UTIL_WARN}` | 85 |  |
 | `{$SNMP_COMMUNITY}` | picinformatique |  |
+| `{$SNMP_UNAVAIL_WARN}` | 5m | Durée d'indisponibilité SNMP continue déclenchant une alerte de niveau Average. |
+| `{$SNMP_UNAVAIL_HIGH}` | 10m | Durée d'indisponibilité SNMP continue déclenchant une alerte de niveau High. |
 
 ## Éléments surveillés (items)
 
@@ -45,6 +47,7 @@ Template d'espace disque
 | Model Name | `synoSystem.modelName` | SNMP_AGENT | TEXT |  |
 | Power Status | `synoSystem.powerStatus` | SNMP_AGENT | UNSIGNED |  |
 | Serial Number | `synoSystem.serialNumber` | SNMP_AGENT | TEXT |  |
+| SNMP agent availability | `zabbix[host,snmp,available]` | INTERNAL | UNSIGNED |  |
 | System Fan Status | `synoSystem.systemFanStatus` | SNMP_AGENT | UNSIGNED |  |
 | System Status | `synoSystem.systemStatus` | SNMP_AGENT | UNSIGNED |  |
 | System Temperature | `synoSystem.temperature` | SNMP_AGENT | UNSIGNED | °C |
@@ -80,6 +83,8 @@ Template d'espace disque
 | System Partition CRITICAL on {HOST.NAME} | Désastre |  |
 | CPU Fan CRITICAL on {HOST.NAME} | Élevé |  |
 | CPU Usage Very High on {HOST.NAME} | Élevé |  |
+| Synology: NAS injoignable en SNMP (>{$SNMP_UNAVAIL_HIGH}) | Élevé | Le NAS ne répond plus aux requêtes SNMP depuis plus de {$SNMP_UNAVAIL_HIGH}, alors que la collecte SNMP fonctionnait auparavant. |
+| Synology: NAS injoignable en SNMP (>{$SNMP_UNAVAIL_WARN}) | Moyen | Le NAS ne répond plus aux requêtes SNMP depuis plus de {$SNMP_UNAVAIL_WARN}, alors que la collecte SNMP fonctionnait auparavant. |
 | System Temperature CRITICAL on {HOST.NAME} | Moyen |  |
 | CPU Usage High on {HOST.NAME} | Avertissement |  |
 | Power Status FAILED on {HOST.NAME} | Avertissement |  |
