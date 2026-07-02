@@ -11,17 +11,46 @@
 | Version Zabbix | 7.4 |
 | Fichier | `PIC Synology DiskStation.yaml` |
 | Groupes | PIC informatique - Template, Synology, Templates |
-| Éléments (items) | 23 |
+| Éléments (items) | 25 |
 | Règles de découverte | 9 |
 | Prototypes d'éléments | 35 |
-| Déclencheurs | 8 |
-| Macros | 3 |
+| Déclencheurs | 10 |
+| Macros | 4 |
 | Cartographies de valeurs | 6 |
 | Tableaux de bord | 0 |
 
 ## Description
 
 Template d'espace disque
+
+## Installation & configuration
+
+## Surveillance de disponibilité (corrélation SNMP / ICMP)
+
+Le template surveille la disponibilité du NAS via deux sources portées
+par le template lui-même (aucun template ICMP externe requis) :
+
+- `zabbix[host,snmp,available]` : disponibilité de la collecte SNMP.
+- `icmpping` : ping ICMP (Simple check) vers l'IP de l'interface du NAS.
+
+Deux déclencheurs corrélés, mutuellement exclusifs :
+
+| Situation | Déclencheur | Sévérité |
+|---|---|---|
+| SNMP en échec > `{$SNMP_UNAVAIL_WARN}` mais NAS joignable en ICMP | SNMP inaccessible mais NAS joignable en ICMP | Average |
+| SNMP en échec ET ICMP en échec | NAS indisponible (SNMP et ICMP en échec) | High |
+
+L'alerte Average dépend de la High : lors d'une panne totale, seule
+l'alerte High « NAS indisponible » reste active (pas de doublon).
+
+### Prérequis
+Le ping ICMP est fourni par ce template. Pour éviter un conflit de clé
+`icmpping`, **ne pas lier « Template Module ICMP Ping »** aux hôtes qui
+utilisent ce template (le délier s'il est déjà présent).
+
+### Configuration
+Ajuster si besoin `{$SNMP_UNAVAIL_WARN}` (durée d'indisponibilité SNMP
+continue avant alerte) et `{$SNMP_COMMUNITY}`.
 
 ## Macros
 
@@ -30,6 +59,7 @@ Template d'espace disque
 | `{$DISK_UTIL_HIGH}` | 95 |  |
 | `{$DISK_UTIL_WARN}` | 85 |  |
 | `{$SNMP_COMMUNITY}` | picinformatique |  |
+| `{$SNMP_UNAVAIL_WARN}` | 5m | Durée d'indisponibilité SNMP continue avant de considérer la collecte SNMP en échec (utilisée par les alertes de corrélation SNMP/ICMP). |
 
 ## Éléments surveillés (items)
 
@@ -39,12 +69,14 @@ Template d'espace disque
 | CPU Idle | `synoSystem.ssCpuIdle` | SNMP_AGENT | UNSIGNED | % |
 | CPU System | `synoSystem.ssCpuSystem` | SNMP_AGENT | UNSIGNED | % |
 | CPU User | `synoSystem.ssCpuUser` | SNMP_AGENT | UNSIGNED | % |
+| ICMP ping | `icmpping` | SIMPLE | UNSIGNED |  |
 | Load Avg 1 min | `synoSystem.laLoadInt.1` | SNMP_AGENT | FLOAT |  |
 | Load Avg 15 min | `synoSystem.laLoadInt.3` | SNMP_AGENT | FLOAT |  |
 | Load Avg 5 min | `synoSystem.laLoadInt.2` | SNMP_AGENT | FLOAT |  |
 | Model Name | `synoSystem.modelName` | SNMP_AGENT | TEXT |  |
 | Power Status | `synoSystem.powerStatus` | SNMP_AGENT | UNSIGNED |  |
 | Serial Number | `synoSystem.serialNumber` | SNMP_AGENT | TEXT |  |
+| SNMP agent availability | `zabbix[host,snmp,available]` | INTERNAL | UNSIGNED |  |
 | System Fan Status | `synoSystem.systemFanStatus` | SNMP_AGENT | UNSIGNED |  |
 | System Status | `synoSystem.systemStatus` | SNMP_AGENT | UNSIGNED |  |
 | System Temperature | `synoSystem.temperature` | SNMP_AGENT | UNSIGNED | °C |
@@ -80,6 +112,8 @@ Template d'espace disque
 | System Partition CRITICAL on {HOST.NAME} | Désastre |  |
 | CPU Fan CRITICAL on {HOST.NAME} | Élevé |  |
 | CPU Usage Very High on {HOST.NAME} | Élevé |  |
+| Synology: NAS indisponible (SNMP et ICMP en échec) | Élevé | Escalade : la collecte SNMP et le ping ICMP sont tous les deux en échec. Le NAS est très probablement totalement indisponible (hors tension, réseau coupé ou plantage), et non un simple incident du service SNMP. |
+| Synology: SNMP inaccessible mais NAS joignable en ICMP | Moyen | La collecte SNMP est en échec depuis plus de {$SNMP_UNAVAIL_WARN}, mais le NAS répond encore au ping ICMP. Problème probablement limité au service SNMP (agent SNMP arrêté, communauté modifiée, ACL...), le NAS lui-même reste en ligne. |
 | System Temperature CRITICAL on {HOST.NAME} | Moyen |  |
 | CPU Usage High on {HOST.NAME} | Avertissement |  |
 | Power Status FAILED on {HOST.NAME} | Avertissement |  |

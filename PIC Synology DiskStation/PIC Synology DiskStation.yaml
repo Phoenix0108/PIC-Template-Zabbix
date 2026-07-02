@@ -12,11 +12,84 @@ zabbix_export:
       template: 'PIC Synology DiskStation'
       name: 'PIC Synology DiskStation'
       description: 'Template d''espace disque'
+      readme: |
+        ## Surveillance de disponibilité (corrélation SNMP / ICMP)
+
+        Le template surveille la disponibilité du NAS via deux sources portées
+        par le template lui-même (aucun template ICMP externe requis) :
+
+        - `zabbix[host,snmp,available]` : disponibilité de la collecte SNMP.
+        - `icmpping` : ping ICMP (Simple check) vers l'IP de l'interface du NAS.
+
+        Deux déclencheurs corrélés, mutuellement exclusifs :
+
+        | Situation | Déclencheur | Sévérité |
+        |---|---|---|
+        | SNMP en échec > `{$SNMP_UNAVAIL_WARN}` mais NAS joignable en ICMP | SNMP inaccessible mais NAS joignable en ICMP | Average |
+        | SNMP en échec ET ICMP en échec | NAS indisponible (SNMP et ICMP en échec) | High |
+
+        L'alerte Average dépend de la High : lors d'une panne totale, seule
+        l'alerte High « NAS indisponible » reste active (pas de doublon).
+
+        ### Prérequis
+        Le ping ICMP est fourni par ce template. Pour éviter un conflit de clé
+        `icmpping`, **ne pas lier « Template Module ICMP Ping »** aux hôtes qui
+        utilisent ce template (le délier s'il est déjà présent).
+
+        ### Configuration
+        Ajuster si besoin `{$SNMP_UNAVAIL_WARN}` (durée d'indisponibilité SNMP
+        continue avant alerte) et `{$SNMP_COMMUNITY}`.
       groups:
         - name: 'PIC informatique - Template'
         - name: Synology
         - name: Templates
       items:
+        - uuid: fb5cfbad4bf2481ba9174fe18eb7d445
+          name: 'ICMP ping'
+          type: SIMPLE
+          key: icmpping
+          history: 90d
+          description: 'Disponibilité réseau du NAS par ping ICMP. 1 - joignable, 0 - injoignable.'
+          tags:
+            - tag: Application
+              value: 'Status'
+            - tag: scope
+              value: availability
+        - uuid: 6b34e6c43e8048208ea99c29675f71be
+          name: 'SNMP agent availability'
+          type: INTERNAL
+          key: 'zabbix[host,snmp,available]'
+          history: 90d
+          description: |
+            Disponibilité de la collecte SNMP sur l'hôte.
+            0 - injoignable, 1 - disponible, 2 - inconnu.
+          tags:
+            - tag: Application
+              value: 'Synology System'
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: 472ba1f179ea4e4bb36cd0a06fc154e7
+              expression: 'max(/PIC Synology DiskStation/zabbix[host,snmp,available],{$SNMP_UNAVAIL_WARN})=0 and max(/PIC Synology DiskStation/icmpping,#3)<>0'
+              name: 'Synology: SNMP inaccessible mais NAS joignable en ICMP'
+              event_name: 'Synology: SNMP inaccessible sur {HOST.NAME} (le NAS répond toujours au ping ICMP)'
+              priority: AVERAGE
+              description: 'La collecte SNMP est en échec depuis plus de {$SNMP_UNAVAIL_WARN}, mais le NAS répond encore au ping ICMP. Problème probablement limité au service SNMP (agent SNMP arrêté, communauté modifiée, ACL...), le NAS lui-même reste en ligne.'
+              dependencies:
+                - name: 'Synology: NAS indisponible (SNMP et ICMP en échec)'
+                  expression: 'max(/PIC Synology DiskStation/zabbix[host,snmp,available],{$SNMP_UNAVAIL_WARN})=0 and max(/PIC Synology DiskStation/icmpping,#3)=0'
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: aec1a7b74ced44178fcf058af107d660
+              expression: 'max(/PIC Synology DiskStation/zabbix[host,snmp,available],{$SNMP_UNAVAIL_WARN})=0 and max(/PIC Synology DiskStation/icmpping,#3)=0'
+              name: 'Synology: NAS indisponible (SNMP et ICMP en échec)'
+              event_name: 'Synology: NAS {HOST.NAME} indisponible (ni SNMP ni ICMP ne répondent)'
+              priority: HIGH
+              description: 'Escalade : la collecte SNMP et le ping ICMP sont tous les deux en échec. Le NAS est très probablement totalement indisponible (hors tension, réseau coupé ou plantage), et non un simple incident du service SNMP.'
+              tags:
+                - tag: scope
+                  value: availability
         - uuid: 8b8f40bcca5a49a5a6def3dd5f53190f
           name: 'CPU Fan Status'
           type: SNMP_AGENT
@@ -1186,6 +1259,9 @@ zabbix_export:
           value: '85'
         - macro: '{$SNMP_COMMUNITY}'
           value: picinformatique
+        - macro: '{$SNMP_UNAVAIL_WARN}'
+          value: 5m
+          description: 'Durée d''indisponibilité SNMP continue avant de considérer la collecte SNMP en échec (utilisée par les alertes de corrélation SNMP/ICMP).'
       valuemaps:
         - uuid: 19e39ef8c4324498824fa535cb0dd924
           name: 'SYNOLOGY-DISK-MIB::diskHealthStatus'
