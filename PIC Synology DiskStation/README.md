@@ -11,11 +11,11 @@
 | Version Zabbix | 7.4 |
 | Fichier | `PIC Synology DiskStation.yaml` |
 | Groupes | PIC informatique - Template, Synology, Templates |
-| Éléments (items) | 24 |
+| Éléments (items) | 25 |
 | Règles de découverte | 9 |
 | Prototypes d'éléments | 35 |
 | Déclencheurs | 10 |
-| Macros | 5 |
+| Macros | 4 |
 | Cartographies de valeurs | 6 |
 | Tableaux de bord | 0 |
 
@@ -30,8 +30,7 @@ Template d'espace disque
 | `{$DISK_UTIL_HIGH}` | 95 |  |
 | `{$DISK_UTIL_WARN}` | 85 |  |
 | `{$SNMP_COMMUNITY}` | picinformatique |  |
-| `{$SNMP_UNAVAIL_WARN}` | 5m | Durée d'indisponibilité SNMP continue déclenchant une alerte de niveau Average. |
-| `{$SNMP_UNAVAIL_HIGH}` | 10m | Durée d'indisponibilité SNMP continue déclenchant une alerte de niveau High. |
+| `{$SNMP_UNAVAIL_WARN}` | 5m | Durée d'indisponibilité SNMP continue avant de considérer la collecte SNMP en échec (utilisée par les alertes de corrélation SNMP/ICMP). |
 
 ## Éléments surveillés (items)
 
@@ -41,6 +40,7 @@ Template d'espace disque
 | CPU Idle | `synoSystem.ssCpuIdle` | SNMP_AGENT | UNSIGNED | % |
 | CPU System | `synoSystem.ssCpuSystem` | SNMP_AGENT | UNSIGNED | % |
 | CPU User | `synoSystem.ssCpuUser` | SNMP_AGENT | UNSIGNED | % |
+| ICMP ping | `icmpping` | SIMPLE | UNSIGNED |  |
 | Load Avg 1 min | `synoSystem.laLoadInt.1` | SNMP_AGENT | FLOAT |  |
 | Load Avg 15 min | `synoSystem.laLoadInt.3` | SNMP_AGENT | FLOAT |  |
 | Load Avg 5 min | `synoSystem.laLoadInt.2` | SNMP_AGENT | FLOAT |  |
@@ -83,8 +83,8 @@ Template d'espace disque
 | System Partition CRITICAL on {HOST.NAME} | Désastre |  |
 | CPU Fan CRITICAL on {HOST.NAME} | Élevé |  |
 | CPU Usage Very High on {HOST.NAME} | Élevé |  |
-| Synology: NAS injoignable en SNMP (>{$SNMP_UNAVAIL_HIGH}) | Élevé | Le NAS ne répond plus aux requêtes SNMP depuis plus de {$SNMP_UNAVAIL_HIGH}, alors que la collecte SNMP fonctionnait auparavant. |
-| Synology: NAS injoignable en SNMP (>{$SNMP_UNAVAIL_WARN}) | Moyen | Le NAS ne répond plus aux requêtes SNMP depuis plus de {$SNMP_UNAVAIL_WARN}, alors que la collecte SNMP fonctionnait auparavant. |
+| Synology: NAS indisponible (SNMP et ICMP en échec) | Élevé | Escalade : la collecte SNMP et le ping ICMP sont tous les deux en échec. Le NAS est très probablement totalement indisponible (hors tension, réseau coupé ou plantage), et non un simple incident du service SNMP. |
+| Synology: SNMP inaccessible mais NAS joignable en ICMP | Moyen | La collecte SNMP est en échec depuis plus de {$SNMP_UNAVAIL_WARN}, mais le NAS répond encore au ping ICMP. Problème probablement limité au service SNMP (agent SNMP arrêté, communauté modifiée, ACL...), le NAS lui-même reste en ligne. |
 | System Temperature CRITICAL on {HOST.NAME} | Moyen |  |
 | CPU Usage High on {HOST.NAME} | Avertissement |  |
 | Power Status FAILED on {HOST.NAME} | Avertissement |  |
