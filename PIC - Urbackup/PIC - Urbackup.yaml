@@ -124,7 +124,7 @@ zabbix_export:
           params: |
             // ================================================================
             // UrBackup Collector — Zabbix Script item
-            // Duktape ES5 / Zabbix 7.4  —  timeout : 30s
+            // Duktape ES5 / Zabbix 7.4  —  timeout : 60s
             // Auth : PBKDF2-HMAC-SHA256 (pbkdf2_rounds > 0) ou MD5 legacy
             // ================================================================
             
@@ -905,19 +905,18 @@ zabbix_export:
                 0..100 = progression du backup actif (issu de /x?a=progress).
                 
                 Utilisé par les triggers "sauvegarde bloquée" :
-                  si min(backup_pc, {$URBACKUP_STUCK_FREEZE}h) = max(backup_pc, {$URBACKUP_STUCK_FREEZE}h)
-                  → progression figée pendant {$URBACKUP_STUCK_FREEZE}h → alerte déclenchée.
-                
+                  si min(backup_pc, {$URBACKUP_STUCK_FREEZE}) = max(backup_pc, {$URBACKUP_STUCK_FREEZE})
+                  → progression figée pendant {$URBACKUP_STUCK_FREEZE} → alerte déclenchée.
+
                 Pas de preprocessing DISCARD_UNCHANGED : chaque valeur est stockée toutes les 5 min
-                pour que le calcul min/max sur {$URBACKUP_STUCK_FREEZE}h soit exact.
+                pour que le calcul min/max sur {$URBACKUP_STUCK_FREEZE} soit exact.
                 La condition "> 0" dans les triggers exclut la valeur sentinelle -1 et les backups
                 en phase de démarrage (0% avant transfert effectif).
               preprocessing:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].backup_pc.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '-1'
+                  error_handler: DISCARD_VALUE
               master_item:
                 key: urbackup.http.master
               tags:
@@ -941,8 +940,7 @@ zabbix_export:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_errors.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '0'
+                  error_handler: DISCARD_VALUE
               master_item:
                 key: urbackup.http.master
               tags:
@@ -992,8 +990,7 @@ zabbix_export:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].file_ok.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '0'
+                  error_handler: DISCARD_VALUE
                 - type: BOOL_TO_DECIMAL
               master_item:
                 key: urbackup.http.master
@@ -1018,8 +1015,7 @@ zabbix_export:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].image_ok.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '0'
+                  error_handler: DISCARD_VALUE
                 - type: BOOL_TO_DECIMAL
               master_item:
                 key: urbackup.http.master
@@ -1045,8 +1041,7 @@ zabbix_export:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_backup_age_s.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '-1'
+                  error_handler: DISCARD_VALUE
               master_item:
                 key: urbackup.http.master
               tags:
@@ -1071,8 +1066,7 @@ zabbix_export:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_duration_s.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '0'
+                  error_handler: DISCARD_VALUE
                 - type: DISCARD_UNCHANGED_HEARTBEAT
                   parameters:
                     - 1h
@@ -1100,8 +1094,7 @@ zabbix_export:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_image_age_s.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '-1'
+                  error_handler: DISCARD_VALUE
               master_item:
                 key: urbackup.http.master
               tags:
@@ -1124,8 +1117,7 @@ zabbix_export:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_size_bytes.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '0'
+                  error_handler: DISCARD_VALUE
                 - type: DISCARD_UNCHANGED_HEARTBEAT
                   parameters:
                     - 1h
@@ -1154,8 +1146,7 @@ zabbix_export:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_status.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '-1'
+                  error_handler: DISCARD_VALUE
               master_item:
                 key: urbackup.http.master
               tags:
@@ -1178,8 +1169,7 @@ zabbix_export:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].online.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '0'
+                  error_handler: DISCARD_VALUE
                 - type: BOOL_TO_DECIMAL
               master_item:
                 key: urbackup.http.master
@@ -1232,8 +1222,7 @@ zabbix_export:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].backup_running.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '0'
+                  error_handler: DISCARD_VALUE
                 - type: BOOL_TO_DECIMAL
               master_item:
                 key: urbackup.http.master
@@ -1256,8 +1245,7 @@ zabbix_export:
                 - type: JSONPATH
                   parameters:
                     - '$.status.status[?(@.name=="{#CLIENT_NAME}")].last_warnings.first()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '0'
+                  error_handler: DISCARD_VALUE
               master_item:
                 key: urbackup.http.master
               tags:
@@ -1459,15 +1447,15 @@ zabbix_export:
                   value: backup-age
             - uuid: 036244573dee4e5282ebe03b980099b7
               expression: |
-                min(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}],5d)=1
-                and min(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],1h)=max(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],1h)
+                min(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}],{$URBACKUP_STUCK_HIGH_DAYS})=1
+                and min(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],{$URBACKUP_STUCK_FREEZE})=max(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],{$URBACKUP_STUCK_FREEZE})
                 and last(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}])>0
                 and last(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}])<100
-              name: 'UrBackup: [{#CLIENT_NAME}] Sauvegarde bloquée depuis +5j — intervenir'
+              name: 'UrBackup: [{#CLIENT_NAME}] Sauvegarde bloquée depuis +{$URBACKUP_STUCK_HIGH_DAYS} — intervenir'
               priority: HIGH
               description: |
-                Le backup de {#CLIENT_NAME} (IP: {#CLIENT_IP}) est en cours depuis plus de 5 jours
-                et la progression (backup_pc) n'a pas bougé depuis 1h.
+                Le backup de {#CLIENT_NAME} (IP: {#CLIENT_IP}) est en cours depuis plus de {$URBACKUP_STUCK_HIGH_DAYS}
+                et la progression (backup_pc) n'a pas bougé depuis {$URBACKUP_STUCK_FREEZE}.
                 
                 Situation critique : un backup bloqué aussi longtemps mobilise des ressources
                 (réseau, disque, verrous fichiers) et masque un vrai problème de sauvegarde.
@@ -1489,15 +1477,15 @@ zabbix_export:
                   value: stuck-backup
             - uuid: 6f3ce6c80607438da2f6ba60c8806b95
               expression: |
-                min(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}],3d)=1
-                and min(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],1h)=max(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],1h)
+                min(/PIC - Urbackup/urbackup.client.running[{#CLIENT_NAME}],{$URBACKUP_STUCK_WARN_DAYS})=1
+                and min(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],{$URBACKUP_STUCK_FREEZE})=max(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}],{$URBACKUP_STUCK_FREEZE})
                 and last(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}])>0
                 and last(/PIC - Urbackup/urbackup.client.backup_pc[{#CLIENT_NAME}])<100
-              name: 'UrBackup: [{#CLIENT_NAME}] Sauvegarde possiblement bloquée depuis +3j'
+              name: 'UrBackup: [{#CLIENT_NAME}] Sauvegarde possiblement bloquée depuis +{$URBACKUP_STUCK_WARN_DAYS}'
               priority: AVERAGE
               description: |
-                Le backup de {#CLIENT_NAME} (IP: {#CLIENT_IP}) est en cours depuis plus de 3 jours
-                et la progression n'a pas changé depuis 1h.
+                Le backup de {#CLIENT_NAME} (IP: {#CLIENT_IP}) est en cours depuis plus de {$URBACKUP_STUCK_WARN_DAYS}
+                et la progression n'a pas changé depuis {$URBACKUP_STUCK_FREEZE}.
                 
                 Un premier backup full ou un gros volume peut légitimement durer plusieurs jours.
                 Cependant, une progression figée pendant 1h est anormale.
@@ -1506,7 +1494,7 @@ zabbix_export:
                   - Vérifier l'interface UrBackup → backup en cours → vitesse de transfert
                   - Si vitesse nulle : problème réseau ou fichier bloquant le transfert
                   - Si vitesse faible mais positive : backup lent, surveiller avant d'intervenir
-                  - Si aucune progression dans les prochaines heures → trigger HIGH se déclenche à 5j
+                  - Si aucune progression dans les prochaines heures → trigger HIGH se déclenche à {$URBACKUP_STUCK_HIGH_DAYS}
               dependencies:
                 - name: 'UrBackup: API indisponible sur {HOST.NAME}'
                   expression: 'nodata(/PIC - Urbackup/urbackup.http.master,{$URBACKUP_NO_DATA_TIMEOUT})=1'
@@ -1737,14 +1725,14 @@ zabbix_export:
           value: .^
           description: 'Regex sur le nom client pour forcer lInclusion dans la supervision serveur. Exemple : ^(SERAG|SRVADALGE)$ pour inclure ces deux clients nommément. Défaut .^ = expression qui ne correspond à rien = fonctionnalité inactive. Utile pour les vieux agents qui ne remontent pas os_version_string.'
         - macro: '{$URBACKUP_STUCK_FREEZE}'
-          value: '1'
-          description: 'Durée (en heures) pendant laquelle la progression du backup doit être figée pour déclencher les alertes "sauvegarde bloquée". Défaut : 1h. Augmenter à 2 ou 3 si des backups très lents génèrent des faux positifs.'
+          value: 1h
+          description: 'Durée pendant laquelle la progression du backup doit être figée pour déclencher les alertes "sauvegarde bloquée" (avec suffixe de temps Zabbix). Défaut : 1h. Augmenter à 2h ou 3h si des backups très lents génèrent des faux positifs.'
         - macro: '{$URBACKUP_STUCK_HIGH_DAYS}'
-          value: '5'
-          description: 'Nombre de jours continus de backup en cours avant alerte HIGH "sauvegarde bloquée". Combiné avec la progression figée depuis {$URBACKUP_STUCK_FREEZE}h. Défaut : 5 jours. Au-delà, intervention manuelle requise.'
+          value: 5d
+          description: 'Durée continue de backup en cours avant alerte HIGH "sauvegarde bloquée" (avec suffixe de temps Zabbix). Combiné avec la progression figée depuis {$URBACKUP_STUCK_FREEZE}. Défaut : 5d. Au-delà, intervention manuelle requise.'
         - macro: '{$URBACKUP_STUCK_WARN_DAYS}'
-          value: '3'
-          description: 'Nombre de jours continus de backup en cours avant alerte AVERAGE "sauvegarde possiblement bloquée". Combiné avec la progression figée depuis {$URBACKUP_STUCK_FREEZE}h. Défaut : 3 jours. Si le trigger HIGH se déclenche ({$URBACKUP_STUCK_HIGH_DAYS}j), intervenir.'
+          value: 3d
+          description: 'Durée continue de backup en cours avant alerte AVERAGE "sauvegarde possiblement bloquée" (avec suffixe de temps Zabbix). Combiné avec la progression figée depuis {$URBACKUP_STUCK_FREEZE}. Défaut : 3d. Si le trigger HIGH se déclenche ({$URBACKUP_STUCK_HIGH_DAYS}), intervenir.'
         - macro: '{$URBACKUP_USER}'
           value: zabbix_monitor
           description: 'Compte UrBackup dédié au monitoring — droits lecture seule recommandés'
