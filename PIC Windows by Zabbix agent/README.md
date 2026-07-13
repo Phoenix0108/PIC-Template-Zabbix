@@ -11,12 +11,12 @@
 | Version Zabbix | 7.4 |
 | Fichier | `PIC Windows by Zabbix agent.yaml` |
 | Groupes | PIC informatique - Template, Templates/Operating systems |
-| Éléments (items) | 47 |
-| Règles de découverte | 2 |
-| Prototypes d'éléments | 13 |
-| Déclencheurs | 25 |
-| Macros | 38 |
-| Cartographies de valeurs | 5 |
+| Éléments (items) | 48 |
+| Règles de découverte | 3 |
+| Prototypes d'éléments | 15 |
+| Déclencheurs | 27 |
+| Macros | 40 |
+| Cartographies de valeurs | 7 |
 | Tableaux de bord | 3 |
 | Tags | class: os, target: windows |
 
@@ -76,6 +76,8 @@ This is an official Windows template. It requires Zabbix agent 7.4 or newer.
 | `{$VFS.FS.PUSED.MAX.CRIT}` | 95 | The critical threshold of the filesystem utilization. |
 | `{$VFS.FS.PUSED.MAX.DISASTER}` | 98 | The disaster threshold of the filesystem utilization. |
 | `{$VFS.FS.PUSED.MAX.WARN}` | 85 | The warning threshold of the filesystem utilization. |
+| `{$WINDOWS.DISK.HEALTH.MATCHES}` | .* | Used in physical disk health discovery. Can be overridden on the host or linked template level. |
+| `{$WINDOWS.DISK.HEALTH.NOT_MATCHES}` | CHANGE_THIS | Used in physical disk health discovery. Can be overridden on the host or linked template level. |
 
 ## Éléments surveillés (items)
 
@@ -126,6 +128,7 @@ This is an official Windows template. It requires Zabbix agent 7.4 or newer.
 | Used swap space in % | `perf_counter_en["\Paging file(_Total)\% Usage"]` | ZABBIX_PASSIVE | FLOAT | % |
 | Version of Zabbix agent running | `agent.version` | ZABBIX_PASSIVE | CHAR |  |
 | Windows: Network interfaces WMI get | `wmi.getall[root\cimv2,"select Name,Description,NetConnectionID,Speed,AdapterTypeId,NetConnectionStatus,GUID from win32_networkadapter where PhysicalAdapter=True and NetConnectionStatus>0"]` | ZABBIX_PASSIVE | TEXT |  |
+| Windows: Physical disks health WMI get | `wmi.getall[root\microsoft\windows\storage,"SELECT DeviceId,FriendlyName,SerialNumber,MediaType,BusType,HealthStatus,Size FROM MSFT_PhysicalDisk"]` | ZABBIX_PASSIVE | TEXT |  |
 | Zabbix agent availability | `zabbix[host,agent,available]` | INTERNAL | UNSIGNED |  |
 | Zabbix agent ping | `agent.ping` | ZABBIX_PASSIVE | UNSIGNED |  |
 
@@ -135,6 +138,7 @@ This is an official Windows template. It requires Zabbix agent 7.4 or newer.
 |---|---|---|---|---|
 | Mounted filesystem discovery | `vfs.fs.dependent.discovery` | DEPENDENT | 5 | 1 |
 | Physical disks discovery | `perf_instance_en.discovery[PhysicalDisk]` | ZABBIX_PASSIVE | 8 | 0 |
+| Physical disk health discovery | `windows.physicaldisk.health.discovery` | DEPENDENT | 2 | 2 |
 
 ## Déclencheurs (triggers)
 
@@ -150,6 +154,8 @@ This is an official Windows template. It requires Zabbix agent 7.4 or newer.
 | EDL: XnLocalControler service is DOWN on {HOST.NAME} | Élevé | The EDL XnLocalControler service is not running. This is a critical EDL service. |
 | EDL: XnPUSH service is DOWN on {HOST.NAME} | Élevé | The EDL XnPUSH service is not running. This is a critical EDL service. |
 | EDL: XnXPLOREUPDATE service is DOWN on {HOST.NAME} | Élevé | The EDL XnXPLOREUPDATE service is not running. This is a critical EDL service. |
+| Windows: Disk [{#FRIENDLYNAME}] is UNHEALTHY (défaillance disque) | Élevé | Le disque physique est signalé UNHEALTHY par Windows Storage (MSFT_PhysicalDisk.HealthStatus = 2). Défaillant ou sur le point de l'être — risque de perte de données imminent. |
+| Windows: Disk [{#FRIENDLYNAME}] health is in WARNING state | Moyen | Le disque physique est en état WARNING (MSFT_PhysicalDisk.HealthStatus = 1). Dégradation détectée : surveiller de près et anticiper un remplacement. |
 | Windows: High memory utilization | Moyen | The system is running out of free memory. |
 | Windows: Zabbix agent is not available | Moyen | For passive agents only, host availability is used with `{$AGENT.TIMEOUT}` as a time threshold. |
 | ADDS Service is DOWN on {HOST.NAME} | Avertissement | ADDS is down please check the service |
@@ -175,6 +181,8 @@ This is an official Windows template. It requires Zabbix agent 7.4 or newer.
 | Windows service state | 0→Running, 1→Paused, 2→Start pending, 3→Pause pending, 4→Continue pending, 5→Stop pending, 6→Stopped, 7→Unknown, … (+1) |
 | zabbix.host.available | 0→not available, 1→available, 2→unknown |
 | Zabbix agent ping status | 1→Up |
+| MSFT_PhysicalDisk::HealthStatus | 0→Healthy, 1→Warning, 2→Unhealthy, 5→Unknown |
+| MSFT_PhysicalDisk::MediaType | 0→Unspecified, 3→HDD, 4→SSD, 5→SCM (Storage Class Memory) |
 
 ## Tableaux de bord (dashboards)
 
