@@ -769,6 +769,22 @@ zabbix_export:
           tags:
             - tag: component
               value: raw
+        - uuid: fcda01819da14543965a2b1bf692552c
+          name: 'Windows: Physical disks health WMI get'
+          key: 'wmi.getall[root\microsoft\windows\storage,"SELECT DeviceId,FriendlyName,SerialNumber,MediaType,BusType,HealthStatus,Size FROM MSFT_PhysicalDisk"]'
+          delay: 5m
+          history: '0'
+          value_type: TEXT
+          description: 'Données brutes de `MSFT_PhysicalDisk` — état de santé des disques physiques (tous types : HDD/SSD/NVMe/Storage Spaces). Sert d''item maître à la découverte de santé disque.'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          tags:
+            - tag: component
+              value: raw
+            - tag: component
+              value: storage
         - uuid: ea1f4acb27ae4aeb8380634b1cf9b1d8
           name: 'Number of cores'
           key: 'wmi.get[root/cimv2,"Select NumberOfLogicalProcessors from Win32_ComputerSystem"]'
@@ -1250,6 +1266,119 @@ zabbix_export:
             - type: DISCARD_UNCHANGED_HEARTBEAT
               parameters:
                 - 1h
+        - uuid: 2c1008269b904527aa781bd64cf752b1
+          name: 'Physical disk health discovery'
+          type: DEPENDENT
+          key: windows.physicaldisk.health.discovery
+          delay: '0'
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: '{#FRIENDLYNAME}'
+                value: '{$WINDOWS.DISK.HEALTH.MATCHES}'
+              - macro: '{#FRIENDLYNAME}'
+                value: '{$WINDOWS.DISK.HEALTH.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+          description: 'Découverte des disques physiques (MSFT_PhysicalDisk) pour la supervision de leur état de santé. Couvre HDD, SSD, NVMe et Storage Spaces.'
+          item_prototypes:
+            - uuid: ebdb316cecdc46af92b64874bc457762
+              name: 'Disk [{#FRIENDLYNAME}] ({#DEVICEID}): Health status'
+              type: DEPENDENT
+              key: 'windows.physicaldisk.health[{#DEVICEID}]'
+              description: |
+                État de santé du disque physique {#FRIENDLYNAME} (n° {#DEVICEID}, S/N {#SERIALNUMBER}), issu de MSFT_PhysicalDisk.HealthStatus.
+                0 = Healthy (sain), 1 = Warning (dégradé), 2 = Unhealthy (défaillant), 5 = Unknown.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.DeviceId=="{#DEVICEID}")].HealthStatus.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'wmi.getall[root\microsoft\windows\storage,"SELECT DeviceId,FriendlyName,SerialNumber,MediaType,BusType,HealthStatus,Size FROM MSFT_PhysicalDisk"]'
+              valuemap:
+                name: 'MSFT_PhysicalDisk::HealthStatus'
+              tags:
+                - tag: component
+                  value: storage
+                - tag: disk
+                  value: '{#FRIENDLYNAME}'
+              trigger_prototypes:
+                - uuid: 91036f59027f4468912fa4b36f2d2e02
+                  expression: 'last(/PIC Windows by Zabbix agent/windows.physicaldisk.health[{#DEVICEID}])=2'
+                  name: 'Windows: Disk [{#FRIENDLYNAME}] is UNHEALTHY (défaillance disque)'
+                  event_name: 'Windows: Disk [{#FRIENDLYNAME}] ({#DEVICEID}) is UNHEALTHY — défaillance disque physique'
+                  opdata: 'HealthStatus: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+                  description: |
+                    Le disque physique {#FRIENDLYNAME} (n° {#DEVICEID}, S/N {#SERIALNUMBER}) est signalé UNHEALTHY
+                    par Windows Storage (MSFT_PhysicalDisk.HealthStatus = 2).
+                    Le disque est défaillant ou sur le point de l'être — risque de perte de données imminent.
+
+                    Actions :
+                      - Sauvegarder immédiatement les données critiques si ce n'est pas déjà fait
+                      - Consulter l'état SMART et le journal Système (event IDs 7, 11, 51, 153)
+                      - Planifier le remplacement du disque
+                      - Sur Storage Spaces / RAID : vérifier l'état du pool et sa reconstruction
+                  tags:
+                    - tag: scope
+                      value: availability
+                - uuid: ef22334225444fc69939234a72687c3a
+                  expression: 'last(/PIC Windows by Zabbix agent/windows.physicaldisk.health[{#DEVICEID}])=1'
+                  name: 'Windows: Disk [{#FRIENDLYNAME}] health is in WARNING state'
+                  event_name: 'Windows: Disk [{#FRIENDLYNAME}] ({#DEVICEID}) health is WARNING'
+                  opdata: 'HealthStatus: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+                  description: |
+                    Le disque physique {#FRIENDLYNAME} (n° {#DEVICEID}, S/N {#SERIALNUMBER}) est en état WARNING
+                    (MSFT_PhysicalDisk.HealthStatus = 1). Une dégradation est détectée : surveiller de près
+                    et anticiper un éventuel remplacement.
+
+                    Actions :
+                      - Consulter l'état SMART détaillé et le journal Système
+                      - Vérifier l'usure (SSD) ou les secteurs réalloués (HDD)
+                  dependencies:
+                    - name: 'Windows: Disk [{#FRIENDLYNAME}] is UNHEALTHY (défaillance disque)'
+                      expression: 'last(/PIC Windows by Zabbix agent/windows.physicaldisk.health[{#DEVICEID}])=2'
+                  tags:
+                    - tag: scope
+                      value: availability
+            - uuid: c15d7466b8ec4f78a3653ab4338df39c
+              name: 'Disk [{#FRIENDLYNAME}] ({#DEVICEID}): Media type'
+              type: DEPENDENT
+              key: 'windows.physicaldisk.mediatype[{#DEVICEID}]'
+              description: 'Type de média du disque {#FRIENDLYNAME} (MSFT_PhysicalDisk.MediaType) : 3 = HDD, 4 = SSD, 5 = SCM, 0 = Unspecified.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.DeviceId=="{#DEVICEID}")].MediaType.first()'
+                  error_handler: DISCARD_VALUE
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'wmi.getall[root\microsoft\windows\storage,"SELECT DeviceId,FriendlyName,SerialNumber,MediaType,BusType,HealthStatus,Size FROM MSFT_PhysicalDisk"]'
+              valuemap:
+                name: 'MSFT_PhysicalDisk::MediaType'
+              tags:
+                - tag: component
+                  value: storage
+                - tag: disk
+                  value: '{#FRIENDLYNAME}'
+          master_item:
+            key: 'wmi.getall[root\microsoft\windows\storage,"SELECT DeviceId,FriendlyName,SerialNumber,MediaType,BusType,HealthStatus,Size FROM MSFT_PhysicalDisk"]'
+          lld_macro_paths:
+            - lld_macro: '{#DEVICEID}'
+              path: $.DeviceId
+            - lld_macro: '{#FRIENDLYNAME}'
+              path: $.FriendlyName
+            - lld_macro: '{#MEDIATYPE}'
+              path: $.MediaType
+            - lld_macro: '{#SERIALNUMBER}'
+              path: $.SerialNumber
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
       tags:
         - tag: class
           value: os
@@ -1606,6 +1735,24 @@ zabbix_export:
             label: 'Threshold for filesystem utilization (warning)'
             description: 'Warning threshold of the filesystem utilization. In the range from 0 to 100 inclusive.'
             regex: '^-?([0-9]+|(([0-9]+)\.([0-9]+)))$'
+        - macro: '{$WINDOWS.DISK.HEALTH.MATCHES}'
+          value: '.*'
+          description: 'Used in physical disk health discovery. Can be overridden on the host or linked template level.'
+          config:
+            type: TEXT
+            priority: '23'
+            section_name: Filters
+            label: 'Filter for physical disk health by name'
+            description: 'Regex string to include discovered physical disk (by friendly name) in health monitoring.'
+        - macro: '{$WINDOWS.DISK.HEALTH.NOT_MATCHES}'
+          value: CHANGE_THIS
+          description: 'Used in physical disk health discovery. Can be overridden on the host or linked template level.'
+          config:
+            type: TEXT
+            priority: '24'
+            section_name: Filters
+            label: 'Filter for physical disk health by name (exclude)'
+            description: 'Regex string to exclude discovered physical disk (by friendly name) from health monitoring.'
       dashboards:
         - uuid: 0fc4d02d00854150a646c6bc560b07f0
           name: Filesystems
@@ -1872,6 +2019,28 @@ zabbix_export:
           mappings:
             - value: '1'
               newvalue: Up
+        - uuid: 6a1c7b51ef854889866a86b55b121eb8
+          name: 'MSFT_PhysicalDisk::HealthStatus'
+          mappings:
+            - value: '0'
+              newvalue: Healthy
+            - value: '1'
+              newvalue: Warning
+            - value: '2'
+              newvalue: Unhealthy
+            - value: '5'
+              newvalue: Unknown
+        - uuid: 99b07640fcbd47bdb845dc0d0d9eaa78
+          name: 'MSFT_PhysicalDisk::MediaType'
+          mappings:
+            - value: '0'
+              newvalue: Unspecified
+            - value: '3'
+              newvalue: HDD
+            - value: '4'
+              newvalue: SSD
+            - value: '5'
+              newvalue: 'SCM (Storage Class Memory)'
   triggers:
     - uuid: 9743da3906274627a633c873248e8b01
       expression: 'min(/PIC Windows by Zabbix agent/perf_counter_en["\System\Processor Queue Length"],5m) - last(/PIC Windows by Zabbix agent/wmi.get[root/cimv2,"Select NumberOfLogicalProcessors from Win32_ComputerSystem"]) * 2 > {$CPU.QUEUE.CRIT.MAX}'
