@@ -4,7 +4,7 @@ Collection de templates Zabbix maintenus par PIC informatique.
 
 Chaque template dispose de son propre dossier contenant l'export YAML et un fichier `README.md` documentant ses éléments, déclencheurs, macros et règles de découverte.
 
-**28 templates** disponibles (export Zabbix 7.4).
+**30 templates** disponibles (export Zabbix 7.4).
 
 ## Templates
 
@@ -18,6 +18,8 @@ Chaque template dispose de son propre dossier contenant l'export YAML et un fich
 | [PIC Aruba CX 8300s by SNMP](./PIC%20Aruba%20CX%208300s%20by%20SNMP/) | Aruba CX8300s by SNMP |
 | [PIC Cisco IOS by SNMP](./PIC%20Cisco%20IOS%20by%20SNMP/) | Template Cisco IOS Software releases 12.2(3.5) or later |
 | [PIC D-Link DES_DGS Switch by SNMP](./PIC%20D-Link%20DES_DGS%20Switch%20by%20SNMP/) | Template D-Link DES_DGS Switch |
+| [PIC - Dell Compellent SC by SNMP](./PIC%20-%20Dell%20Compellent%20SC%20by%20SNMP/) | Template de monitoring pour baies Dell Compellent / Storage Center SC Series (ex : SCv3020) |
+| [PIC - Dell EqualLogic PS by SNMP](./PIC%20-%20Dell%20EqualLogic%20PS%20by%20SNMP/) | Template de monitoring pour baies Dell EqualLogic PS Series (ex : PS4100XV / 70-0476) |
 | [PIC Dell iDRAC by SNMP](./PIC%20Dell%20iDRAC%20by%20SNMP/) | Template for Dell servers with iDRAC version 7 and later. |
 | [PIC FortiGate by SNMP](./PIC%20FortiGate%20by%20SNMP/) | The template for monitoring FortiGate firewall by SNMP. |
 | [PIC HP iLO by SNMP](./PIC%20HP%20iLO%20by%20SNMP/) | Template Server HP iLO |

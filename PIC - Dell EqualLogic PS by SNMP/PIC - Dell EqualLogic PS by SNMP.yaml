@@ -1,0 +1,595 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: a1b2c3d4e5f64789a1234567890abcd1
+      name: 'PIC informatique - Template'
+    - uuid: 52e6b217bd404812acf56f4bcd08942f
+      name: Templates/Storage
+  templates:
+    - uuid: 363e0e186d8c4e49838b551de5f5a8aa
+      template: 'PIC - Dell EqualLogic PS by SNMP'
+      name: 'PIC - Dell EqualLogic PS by SNMP'
+      description: |
+        Template de monitoring pour baies Dell EqualLogic PS Series (ex : PS4100XV / 70-0476).
+        Basé sur les MIB EQLMEMBER-MIB et EQLDISK-MIB (entreprise 1.3.6.1.4.1.12740).
+        Santé membre, statut RAID, capacité, disques, capteurs de température, ventilateurs et alimentations.
+        Protocole : SNMP v2c
+        Auteur     : PIC informatique
+        Version    : 1.0 — Zabbix 7.4
+      groups:
+        - name: 'PIC informatique - Template'
+        - name: Templates/Storage
+      items:
+        - uuid: 9e5a062486144f70bdef3785f417a8ab
+          name: 'ICMP Ping'
+          type: SIMPLE
+          key: icmpping
+          delay: 60s
+          history: 90d
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: 8475c2444aa24c7e87dab6ceb9ae70ad
+              expression: 'max(/PIC - Dell EqualLogic PS by SNMP/icmpping,5m)=0'
+              name: '{HOST.NAME} is unreachable'
+              priority: HIGH
+        - uuid: d19cfffb4db541048cbe43b450db8d0a
+          name: 'ICMP Loss'
+          type: SIMPLE
+          key: icmppingloss
+          delay: 60s
+          history: 90d
+          units: '%'
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: a561f8b897bd4f778ef78d40893f1fa3
+              expression: 'min(/PIC - Dell EqualLogic PS by SNMP/icmppingloss,5m)>20'
+              name: 'Packet loss HIGH on {HOST.NAME}'
+              priority: WARNING
+        - uuid: a7fd01b1f0bd4d5a91e65102d605738e
+          name: 'ICMP Response Time'
+          type: SIMPLE
+          key: icmppingsec
+          delay: 60s
+          history: 90d
+          units: ms
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1000'
+          tags:
+            - tag: Application
+              value: 'System Health'
+        - uuid: b5fd1ac0d1b24ba19995f8369a430d46
+          name: 'Model Name'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.11.1.1.1
+          key: 'system.model[eqlMemberModel.1]'
+          delay: 1h
+          history: 90d
+          value_type: TEXT
+          inventory_link: MODEL
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: b10a4aa2179344cda963f57634f6e1eb
+          name: 'Serial Number'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.11.1.2.1
+          key: 'system.serial[eqlMemberSerialNumber.1]'
+          delay: 1h
+          history: 90d
+          value_type: TEXT
+          inventory_link: SERIALNO_A
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: 1159a3a9cb8d439bbdf2e0e89627268c
+          name: 'Member Name'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.1.1.9.1
+          key: 'member.name[eqlMemberName.1]'
+          delay: 1h
+          history: 90d
+          value_type: TEXT
+          inventory_link: NAME
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: 0d58aaef1c594f51b75e0faa7bdcca1e
+          name: 'Number of Controllers'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.11.1.3.1
+          key: 'member.controllers[eqlMemberControllers.1]'
+          delay: 1h
+          history: 90d
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: 329c469257f24b8392263ec238f5e266
+          name: 'Number of Disks'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.11.1.4.1
+          key: 'member.disks[eqlMemberDisks.1]'
+          delay: 1h
+          history: 90d
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: c92515058b154bb6aabcf1c0317c5e04
+          name: 'Member Health Status'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.5.1.1.1
+          key: 'member.health[eqlMemberHealthStatus.1]'
+          delay: 60s
+          history: 90d
+          description: '[0] unknown  [1] normal  [2] warning  [3] critical'
+          valuemap:
+            name: 'EQL Member Health Status'
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: 814f5be4b17246c7a956bbc36971e5b4
+              expression: 'last(/PIC - Dell EqualLogic PS by SNMP/member.health[eqlMemberHealthStatus.1])=3'
+              name: 'Member health is CRITICAL on {HOST.NAME}'
+              opdata: 'Current status: {ITEM.LASTVALUE1}'
+              priority: HIGH
+            - uuid: 239b7e397be14203b9c1060013e111c5
+              expression: 'last(/PIC - Dell EqualLogic PS by SNMP/member.health[eqlMemberHealthStatus.1])=2'
+              name: 'Member health is in WARNING state on {HOST.NAME}'
+              opdata: 'Current status: {ITEM.LASTVALUE1}'
+              priority: AVERAGE
+              dependencies:
+                - name: 'Member health is CRITICAL on {HOST.NAME}'
+                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/member.health[eqlMemberHealthStatus.1])=3'
+        - uuid: 166ee0b77c644115a361736c314ba13d
+          name: 'RAID Status'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.13.1.1.1
+          key: 'member.raid[eqlMemberRaidStatus.1]'
+          delay: 60s
+          history: 90d
+          description: '[1] ok  [2] degraded  [3] verifying  [4] reconstructing  [5] failed  [6] catastrophic-loss  [7] expanding  [8] mirroring'
+          valuemap:
+            name: 'EQL RAID Status'
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: 99d707c07fb342b4b2707b6a72aaed71
+              expression: 'last(/PIC - Dell EqualLogic PS by SNMP/member.raid[eqlMemberRaidStatus.1])=5 or last(/PIC - Dell EqualLogic PS by SNMP/member.raid[eqlMemberRaidStatus.1])=6'
+              name: 'RAID has FAILED on {HOST.NAME}'
+              opdata: 'Current status: {ITEM.LASTVALUE1}'
+              priority: DISASTER
+            - uuid: 005d328f816f4620ac53b1dfa6f8b386
+              expression: 'last(/PIC - Dell EqualLogic PS by SNMP/member.raid[eqlMemberRaidStatus.1])=2'
+              name: 'RAID is DEGRADED on {HOST.NAME}'
+              opdata: 'Current status: {ITEM.LASTVALUE1}'
+              priority: HIGH
+            - uuid: 8e40128b698e4a4fa7a6971a9dced2f1
+              expression: 'last(/PIC - Dell EqualLogic PS by SNMP/member.raid[eqlMemberRaidStatus.1])=4'
+              name: 'RAID is reconstructing on {HOST.NAME}'
+              opdata: 'Current status: {ITEM.LASTVALUE1}'
+              priority: WARNING
+        - uuid: bbda14b1add7406e9af4f6f6e16db38c
+          name: 'Total Storage'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.10.1.1.1
+          key: 'member.storage.total[eqlMemberTotalStorage.1]'
+          delay: 5m
+          history: 90d
+          units: B
+          description: 'Capacité brute totale du membre (valeur MIB en Mo, convertie en octets).'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1048576'
+          tags:
+            - tag: Application
+              value: Capacity
+        - uuid: 3e4dbeac3de54f649846adce020ecf75
+          name: 'Used Storage'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.10.1.2.1
+          key: 'member.storage.used[eqlMemberUsedStorage.1]'
+          delay: 5m
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1048576'
+          tags:
+            - tag: Application
+              value: Capacity
+        - uuid: a35162af80cb459caca1104d920edc67
+          name: 'Snapshot Storage'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.10.1.3.1
+          key: 'member.storage.snap[eqlMemberSnapStorage.1]'
+          delay: 5m
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1048576'
+          tags:
+            - tag: Application
+              value: Capacity
+        - uuid: d502d2403b244a7986d6bcd1b400c21d
+          name: 'Replication Storage'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.10.1.4.1
+          key: 'member.storage.repl[eqlMemberReplStorage.1]'
+          delay: 5m
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1048576'
+          tags:
+            - tag: Application
+              value: Capacity
+        - uuid: 376e04bfb9dd4f2a82dac713f34d18c1
+          name: 'Storage Used (%)'
+          type: CALCULATED
+          key: member.storage.pct
+          delay: 5m
+          history: 90d
+          value_type: FLOAT
+          units: '%'
+          params: 'last(//member.storage.used[eqlMemberUsedStorage.1])/last(//member.storage.total[eqlMemberTotalStorage.1])*100'
+          tags:
+            - tag: Application
+              value: Capacity
+          triggers:
+            - uuid: 8fa61a467c9e4106b5567dab0e7d9264
+              expression: 'min(/PIC - Dell EqualLogic PS by SNMP/member.storage.pct,30m)>{$STORAGE_UTIL_HIGH}'
+              name: 'Storage usage is CRITICAL on {HOST.NAME}'
+              opdata: 'Current usage: {ITEM.LASTVALUE1}'
+              priority: HIGH
+            - uuid: abc6d70d1647454c985ddf8892ddcb48
+              expression: 'min(/PIC - Dell EqualLogic PS by SNMP/member.storage.pct,30m)>{$STORAGE_UTIL_WARN}'
+              name: 'Storage usage is HIGH on {HOST.NAME}'
+              opdata: 'Current usage: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'Storage usage is CRITICAL on {HOST.NAME}'
+                  expression: 'min(/PIC - Dell EqualLogic PS by SNMP/member.storage.pct,30m)>{$STORAGE_UTIL_HIGH}'
+        - uuid: f1941cad4e3f407080c5e93893f7365a
+          name: 'Read Latency'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.12.1.4.1
+          key: 'member.latency.read[eqlMemberReadAvgLatency.1]'
+          delay: 60s
+          history: 90d
+          units: ms
+          tags:
+            - tag: Application
+              value: Performance
+        - uuid: f7b02ac05b2f43838dce5a2eac05a7bc
+          name: 'Write Latency'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.12.1.5.1
+          key: 'member.latency.write[eqlMemberWriteAvgLatency.1]'
+          delay: 60s
+          history: 90d
+          units: ms
+          tags:
+            - tag: Application
+              value: Performance
+        - uuid: 3bee94779587493f8cdfe10515d63737
+          name: 'Read Operations'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.12.1.6.1
+          key: 'member.iops.read[eqlMemberReadOpCount.1]'
+          delay: 60s
+          history: 90d
+          value_type: FLOAT
+          units: '!ops'
+          preprocessing:
+            - type: CHANGE_PER_SECOND
+          tags:
+            - tag: Application
+              value: Performance
+        - uuid: 4939b17f8f364f76be399aec9b01a52d
+          name: 'Write Operations'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.12740.2.1.12.1.7.1
+          key: 'member.iops.write[eqlMemberWriteOpCount.1]'
+          delay: 60s
+          history: 90d
+          value_type: FLOAT
+          units: '!ops'
+          preprocessing:
+            - type: CHANGE_PER_SECOND
+          tags:
+            - tag: Application
+              value: Performance
+      discovery_rules:
+        - uuid: 3be105b476a74292a62065037131cfa7
+          name: 'Physical Disks'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#DISKSLOT},1.3.6.1.4.1.12740.3.1.1.1.10]'
+          key: eql.disk.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des disques physiques (EQLDISK-MIB).'
+          item_prototypes:
+            - uuid: a1e49fc08b5e48b19a5526437f31a647
+              name: 'Disk {#DISKSLOT} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.12740.3.1.1.1.8.{#SNMPINDEX}'
+              key: 'eql.disk.status[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              description: '[1] on-line  [2] spare  [3] failed  [4] off-line  [8] unsupported-version  [9] unhealthy'
+              valuemap:
+                name: 'EQL Disk Status'
+              tags:
+                - tag: Application
+                  value: Disk
+              trigger_prototypes:
+                - uuid: f702ffac410f43688565950223b7ce94
+                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status[{#SNMPINDEX}])=3'
+                  name: 'Disk {#DISKSLOT} has FAILED on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+                - uuid: 1793384819ec4eb389382644dcd3cfd5
+                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status[{#SNMPINDEX}])=4 or last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status[{#SNMPINDEX}])=9'
+                  name: 'Disk {#DISKSLOT} is off-line/unhealthy on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+            - uuid: 169566379b354fff9c3259a07b741ada
+              name: 'Disk {#DISKSLOT} Size'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.12740.3.1.1.1.6.{#SNMPINDEX}'
+              key: 'eql.disk.size[{#SNMPINDEX}]'
+              delay: 1h
+              history: 90d
+              units: B
+              tags:
+                - tag: Application
+                  value: Disk
+        - uuid: bf8d9a993d6144d685e31fae61480676
+          name: 'Temperature Sensors'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SENSOR},1.3.6.1.4.1.12740.2.1.6.1.2]'
+          key: eql.temp.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des capteurs de température (EQLMEMBER-MIB).'
+          item_prototypes:
+            - uuid: be7a373a1c6946df8c01b6a0e2f391c0
+              name: 'Temperature {#SENSOR}'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.12740.2.1.6.1.3.{#SNMPINDEX}'
+              key: 'eql.temp.value[{#SNMPINDEX}]'
+              delay: 3m
+              history: 90d
+              units: °C
+              tags:
+                - tag: Application
+                  value: 'System Health'
+              trigger_prototypes:
+                - uuid: f97f90d71f0b4f84852a9e1154001491
+                  expression: 'avg(/PIC - Dell EqualLogic PS by SNMP/eql.temp.value[{#SNMPINDEX}],#3)>{$TEMP_CRIT}'
+                  name: 'Temperature {#SENSOR} is CRITICAL on {HOST.NAME}'
+                  opdata: 'Current: {ITEM.LASTVALUE1} °C'
+                  priority: HIGH
+                - uuid: b414f788906b449c97187ee113586a72
+                  expression: 'avg(/PIC - Dell EqualLogic PS by SNMP/eql.temp.value[{#SNMPINDEX}],#3)>{$TEMP_WARN}'
+                  name: 'Temperature {#SENSOR} is HIGH on {HOST.NAME}'
+                  opdata: 'Current: {ITEM.LASTVALUE1} °C'
+                  priority: WARNING
+                  dependencies:
+                    - name: 'Temperature {#SENSOR} is CRITICAL on {HOST.NAME}'
+                      expression: 'avg(/PIC - Dell EqualLogic PS by SNMP/eql.temp.value[{#SNMPINDEX}],#3)>{$TEMP_CRIT}'
+        - uuid: 1e9f8eee69154609b2b9697f71a211a3
+          name: Fans
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#FAN},1.3.6.1.4.1.12740.2.1.7.1.2]'
+          key: eql.fan.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des ventilateurs (EQLMEMBER-MIB).'
+          item_prototypes:
+            - uuid: 329aeb145fb5436c8324d290997bb0bd
+              name: 'Fan {#FAN} Speed'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.12740.2.1.7.1.3.{#SNMPINDEX}'
+              key: 'eql.fan.speed[{#SNMPINDEX}]'
+              delay: 3m
+              history: 90d
+              units: rpm
+              tags:
+                - tag: Application
+                  value: 'System Health'
+              trigger_prototypes:
+                - uuid: f5ed31cfb6834cff8a5d00f56d3c3052
+                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.fan.speed[{#SNMPINDEX}])<200 and last(/PIC - Dell EqualLogic PS by SNMP/eql.fan.speed[{#SNMPINDEX}])>=0'
+                  name: 'Fan {#FAN} stopped on {HOST.NAME}'
+                  opdata: 'Current speed: {ITEM.LASTVALUE1} rpm'
+                  priority: AVERAGE
+        - uuid: ac7cdc1aea0249fdba733b5b4171bbf8
+          name: 'Power Supplies'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#PSU},1.3.6.1.4.1.12740.2.1.8.1.2]'
+          key: eql.psu.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des blocs d''alimentation (EQLMEMBER-MIB).'
+          item_prototypes:
+            - uuid: 5a36aa695e6b467c9a7774a872a04c58
+              name: 'Power Supply {#PSU} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.12740.2.1.8.1.3.{#SNMPINDEX}'
+              key: 'eql.psu.status[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              description: '[1] on-and-operating  [2] no-ac-power  [3] failed-or-no-data'
+              valuemap:
+                name: 'EQL Power Supply Status'
+              tags:
+                - tag: Application
+                  value: 'System Health'
+              trigger_prototypes:
+                - uuid: 843b2c02f8e544388fe21589ea448835
+                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.psu.status[{#SNMPINDEX}])<>1'
+                  name: 'Power Supply {#PSU} problem on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+      tags:
+        - tag: class
+          value: storage
+        - tag: target
+          value: SAN
+        - tag: vendor
+          value: Dell
+      macros:
+        - macro: '{$SNMP_COMMUNITY}'
+          value: picinformatique
+          description: 'Communauté SNMP v2c'
+        - macro: '{$STORAGE_UTIL_HIGH}'
+          value: '90'
+          description: 'Seuil critique d''utilisation du stockage (%)'
+        - macro: '{$STORAGE_UTIL_WARN}'
+          value: '80'
+          description: 'Seuil d''alerte d''utilisation du stockage (%)'
+        - macro: '{$TEMP_CRIT}'
+          value: '60'
+          description: 'Température critique (°C)'
+        - macro: '{$TEMP_WARN}'
+          value: '50'
+          description: 'Température d''alerte (°C)'
+      valuemaps:
+        - uuid: 6109d89a272344cd94865416c1602524
+          name: 'EQL Member Health Status'
+          mappings:
+            - value: '0'
+              newvalue: unknown
+            - value: '1'
+              newvalue: normal
+            - value: '2'
+              newvalue: warning
+            - value: '3'
+              newvalue: critical
+        - uuid: 5c843e3618e34b2cb619dcc1ee8a3fa5
+          name: 'EQL RAID Status'
+          mappings:
+            - value: '1'
+              newvalue: ok
+            - value: '2'
+              newvalue: degraded
+            - value: '3'
+              newvalue: verifying
+            - value: '4'
+              newvalue: reconstructing
+            - value: '5'
+              newvalue: failed
+            - value: '6'
+              newvalue: catastrophic-loss
+            - value: '7'
+              newvalue: expanding
+            - value: '8'
+              newvalue: mirroring
+        - uuid: 8788635aca4b4b2893af7e7cbda84e76
+          name: 'EQL Disk Status'
+          mappings:
+            - value: '1'
+              newvalue: on-line
+            - value: '2'
+              newvalue: spare
+            - value: '3'
+              newvalue: failed
+            - value: '4'
+              newvalue: off-line
+            - value: '5'
+              newvalue: alt-sig
+            - value: '6'
+              newvalue: too-small
+            - value: '7'
+              newvalue: history-of-failures
+            - value: '8'
+              newvalue: unsupported-version
+            - value: '9'
+              newvalue: unhealthy
+            - value: '10'
+              newvalue: replacement
+        - uuid: a0a66a42a4b64d548c1c51d375b88d4a
+          name: 'EQL Power Supply Status'
+          mappings:
+            - value: '1'
+              newvalue: on-and-operating
+            - value: '2'
+              newvalue: no-ac-power
+            - value: '3'
+              newvalue: failed-or-no-data
+  graphs:
+    - uuid: dc4f1934fee647629c6b4bd1ecc25445
+      name: 'EqualLogic: Storage Capacity'
+      height: '300'
+      graph_items:
+        - drawtype: BOLD_LINE
+          color: 1A7C11
+          calc_fnc: ALL
+          item:
+            host: 'PIC - Dell EqualLogic PS by SNMP'
+            key: 'member.storage.total[eqlMemberTotalStorage.1]'
+        - sortorder: '1'
+          drawtype: FILLED_REGION
+          color: F63100
+          calc_fnc: ALL
+          item:
+            host: 'PIC - Dell EqualLogic PS by SNMP'
+            key: 'member.storage.used[eqlMemberUsedStorage.1]'
+        - sortorder: '2'
+          color: 2774A4
+          calc_fnc: ALL
+          item:
+            host: 'PIC - Dell EqualLogic PS by SNMP'
+            key: 'member.storage.snap[eqlMemberSnapStorage.1]'
+    - uuid: 972d92dd7c87419c90c47b9c922b8965
+      name: 'EqualLogic: Latency'
+      height: '300'
+      graph_items:
+        - drawtype: GRADIENT_LINE
+          color: 00AA00
+          calc_fnc: ALL
+          item:
+            host: 'PIC - Dell EqualLogic PS by SNMP'
+            key: 'member.latency.read[eqlMemberReadAvgLatency.1]'
+        - sortorder: '1'
+          drawtype: GRADIENT_LINE
+          color: 3333FF
+          calc_fnc: ALL
+          item:
+            host: 'PIC - Dell EqualLogic PS by SNMP'
+            key: 'member.latency.write[eqlMemberWriteAvgLatency.1]'
+    - uuid: b93f82861a16431780b4c8dbd292bf1f
+      name: 'EqualLogic: IOPS'
+      height: '300'
+      graph_items:
+        - drawtype: GRADIENT_LINE
+          color: 1A7C11
+          calc_fnc: ALL
+          item:
+            host: 'PIC - Dell EqualLogic PS by SNMP'
+            key: 'member.iops.read[eqlMemberReadOpCount.1]'
+        - sortorder: '1'
+          drawtype: GRADIENT_LINE
+          color: F63100
+          calc_fnc: ALL
+          item:
+            host: 'PIC - Dell EqualLogic PS by SNMP'
+            key: 'member.iops.write[eqlMemberWriteOpCount.1]'

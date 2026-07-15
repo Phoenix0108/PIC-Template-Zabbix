@@ -1,0 +1,497 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: a1b2c3d4e5f64789a1234567890abcd1
+      name: 'PIC informatique - Template'
+    - uuid: 52e6b217bd404812acf56f4bcd08942f
+      name: Templates/Storage
+  templates:
+    - uuid: 6a9d21e2db584091ae6873749ba81c63
+      template: 'PIC - Dell Compellent SC by SNMP'
+      name: 'PIC - Dell Compellent SC by SNMP'
+      description: |
+        Template de monitoring pour baies Dell Compellent / Storage Center SC Series (ex : SCv3020).
+        Basé sur la COMPELLENT-MIB (entreprise 1.3.6.1.4.1.16139).
+        Statut global, contrôleurs, disques, enceintes, capteurs de température, ventilateurs, alimentations et volumes.
+        Protocole : SNMP v2c
+        Auteur     : PIC informatique
+        Version    : 1.0 — Zabbix 7.4
+      groups:
+        - name: 'PIC informatique - Template'
+        - name: Templates/Storage
+      items:
+        - uuid: b49d1a94ac554ceeb4417052bb6ae85a
+          name: 'ICMP Ping'
+          type: SIMPLE
+          key: icmpping
+          delay: 60s
+          history: 90d
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: 95df6cd59827414a890b0b9fccc950cd
+              expression: 'max(/PIC - Dell Compellent SC by SNMP/icmpping,5m)=0'
+              name: '{HOST.NAME} is unreachable'
+              priority: HIGH
+        - uuid: 1c6694ab781f4049b99de55af9a72f92
+          name: 'ICMP Loss'
+          type: SIMPLE
+          key: icmppingloss
+          delay: 60s
+          history: 90d
+          units: '%'
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: 7f938b8fb538473a8287ecf5fbdff8fa
+              expression: 'min(/PIC - Dell Compellent SC by SNMP/icmppingloss,5m)>20'
+              name: 'Packet loss HIGH on {HOST.NAME}'
+              priority: WARNING
+        - uuid: 154f93c7e454461191645cc2a2ec5a55
+          name: 'ICMP Response Time'
+          type: SIMPLE
+          key: icmppingsec
+          delay: 60s
+          history: 90d
+          units: ms
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1000'
+          tags:
+            - tag: Application
+              value: 'System Health'
+        - uuid: 2956322e9bb74cccbf9b21553f72044e
+          name: 'Product Name'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.16139.2.1.0
+          key: 'system.product[productIDDisplayName.0]'
+          delay: 1h
+          history: 90d
+          value_type: TEXT
+          inventory_link: MODEL
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: 2660e780375b471aafa9f24a959f51fc
+          name: 'Product Description'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.16139.2.2.0
+          key: 'system.descr[productIDDescription.0]'
+          delay: 1h
+          history: 90d
+          value_type: TEXT
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: 909335c0c9924710aca288c0922a4810
+          name: 'Version'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.16139.2.4.0
+          key: 'system.version[productIDVersion.0]'
+          delay: 1h
+          history: 90d
+          value_type: TEXT
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: e2f74b6916ad44ac8a96c4177b653a71
+          name: 'Serial Number / Service Tag'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.16139.2.5.0
+          key: 'system.serial[productIDSerialNumber.0]'
+          delay: 1h
+          history: 90d
+          value_type: TEXT
+          inventory_link: SERIALNO_A
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: 16968b82557c48b882a71b742600d505
+          name: 'Build Number'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.16139.2.7.0
+          key: 'system.build[productIDBuildNumber.0]'
+          delay: 1h
+          history: 90d
+          value_type: TEXT
+          tags:
+            - tag: Application
+              value: 'System Information'
+        - uuid: 3f45aa593de845f28a66b05c4d2019ac
+          name: 'Global Status'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.16139.2.6.0
+          key: 'system.status[productIDGlobalStatus.0]'
+          delay: 60s
+          history: 90d
+          description: '[1] other  [2] unknown  [3] ok  [4] noncritical  [5] critical  [6] nonrecoverable'
+          valuemap:
+            name: 'Compellent Global Status'
+          tags:
+            - tag: Application
+              value: 'System Health'
+          triggers:
+            - uuid: 8264726f7a5a43a08e347c399a130d3a
+              expression: 'last(/PIC - Dell Compellent SC by SNMP/system.status[productIDGlobalStatus.0])=5 or last(/PIC - Dell Compellent SC by SNMP/system.status[productIDGlobalStatus.0])=6'
+              name: 'Global status is CRITICAL on {HOST.NAME}'
+              opdata: 'Current status: {ITEM.LASTVALUE1}'
+              priority: HIGH
+            - uuid: 9a52c4e6e8a54fc88ca0171426ca2b43
+              expression: 'last(/PIC - Dell Compellent SC by SNMP/system.status[productIDGlobalStatus.0])=4'
+              name: 'Global status is non-critical on {HOST.NAME}'
+              opdata: 'Current status: {ITEM.LASTVALUE1}'
+              priority: AVERAGE
+              dependencies:
+                - name: 'Global status is CRITICAL on {HOST.NAME}'
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/system.status[productIDGlobalStatus.0])=5 or last(/PIC - Dell Compellent SC by SNMP/system.status[productIDGlobalStatus.0])=6'
+      discovery_rules:
+        - uuid: fc88fae645a8487b8b2cc8316f80d1ec
+          name: Controllers
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#CTLR},1.3.6.1.4.1.16139.2.13.1.4]'
+          key: sc.ctlr.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des contrôleurs (scCtlrTable).'
+          item_prototypes:
+            - uuid: 88c577dcc5724884873118e436edcade
+              name: 'Controller {#CTLR} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.13.1.3.{#SNMPINDEX}'
+              key: 'sc.ctlr.status[{#SNMPINDEX}]'
+              delay: 60s
+              history: 90d
+              description: '[1] up  [2] down  [3] degraded'
+              valuemap:
+                name: 'Compellent ScStatus'
+              tags:
+                - tag: Application
+                  value: Controller
+              trigger_prototypes:
+                - uuid: dacd1b61120f4644ba6d8afceaac593e
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.ctlr.status[{#SNMPINDEX}])=2'
+                  name: 'Controller {#CTLR} is DOWN on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: DISASTER
+                - uuid: ffbb5bb4dfd045bbae1fe2657f368495
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.ctlr.status[{#SNMPINDEX}])=3'
+                  name: 'Controller {#CTLR} is DEGRADED on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+            - uuid: a3259bce86a34d499c128d54a720bcc4
+              name: 'Controller {#CTLR} Model'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.13.1.7.{#SNMPINDEX}'
+              key: 'sc.ctlr.model[{#SNMPINDEX}]'
+              delay: 1h
+              history: 90d
+              value_type: TEXT
+              tags:
+                - tag: Application
+                  value: Controller
+        - uuid: c53188c67fc648c2962c44a42f12667a
+          name: 'Physical Disks'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#DISK},1.3.6.1.4.1.16139.2.14.1.4]'
+          key: sc.disk.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des disques physiques (scDiskTable). {#DISK} au format enceinte-disque.'
+          item_prototypes:
+            - uuid: 90b1002f9f0e4d108cbf8a1de2d8fc9e
+              name: 'Disk {#DISK} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.14.1.3.{#SNMPINDEX}'
+              key: 'sc.disk.status[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              description: '[1] up  [2] down  [3] degraded'
+              valuemap:
+                name: 'Compellent ScStatus'
+              tags:
+                - tag: Application
+                  value: Disk
+              trigger_prototypes:
+                - uuid: 3b6063cc77af432a8069b52e9f24312e
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.disk.status[{#SNMPINDEX}])=2'
+                  name: 'Disk {#DISK} is DOWN on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+                - uuid: 7c7423bd286344a290b6ca2377671488
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.disk.status[{#SNMPINDEX}])=3'
+                  name: 'Disk {#DISK} is DEGRADED on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+            - uuid: e5d0b0dfecfa4488a67c3dda29607298
+              name: 'Disk {#DISK} Healthy'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.14.1.5.{#SNMPINDEX}'
+              key: 'sc.disk.healthy[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              description: '[1] true (healthy)  [2] false (not healthy)'
+              valuemap:
+                name: 'Compellent TruthValue'
+              tags:
+                - tag: Application
+                  value: Disk
+              trigger_prototypes:
+                - uuid: 8cd9ad682077438c824093a742b2bf5e
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.disk.healthy[{#SNMPINDEX}])=2'
+                  name: 'Disk {#DISK} reports not healthy on {HOST.NAME}'
+                  priority: AVERAGE
+            - uuid: 96d78709edde40ea9fe4cd6b8da0d6bc
+              name: 'Disk {#DISK} Size'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.14.1.9.{#SNMPINDEX}'
+              key: 'sc.disk.size[{#SNMPINDEX}]'
+              delay: 1h
+              history: 90d
+              units: B
+              description: 'Capacité brute (valeur MIB en Go, convertie en octets).'
+              preprocessing:
+                - type: MULTIPLIER
+                  parameters:
+                    - '1073741824'
+              tags:
+                - tag: Application
+                  value: Disk
+        - uuid: 16687a4b2af14fb49ae6891528c218a2
+          name: Enclosures
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#ENCL},1.3.6.1.4.1.16139.2.15.1.4]'
+          key: sc.encl.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des enceintes (scEnclTable).'
+          item_prototypes:
+            - uuid: 2f208d8e1d5f4819ae11244e0d244e3d
+              name: 'Enclosure {#ENCL} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.15.1.3.{#SNMPINDEX}'
+              key: 'sc.encl.status[{#SNMPINDEX}]'
+              delay: 60s
+              history: 90d
+              description: '[1] up  [2] down  [3] degraded'
+              valuemap:
+                name: 'Compellent ScStatus'
+              tags:
+                - tag: Application
+                  value: Enclosure
+              trigger_prototypes:
+                - uuid: 293567c3ccbd46beb8b7e28b9b9f55fe
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.encl.status[{#SNMPINDEX}])=2'
+                  name: 'Enclosure {#ENCL} is DOWN on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+                - uuid: bddc0572a2584f369ce6206bf7a0a13d
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.encl.status[{#SNMPINDEX}])=3'
+                  name: 'Enclosure {#ENCL} is DEGRADED on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+        - uuid: b58481d0545e4093ad06bb12caba541f
+          name: 'Temperature Sensors'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SENSOR},1.3.6.1.4.1.16139.2.23.1.4]'
+          key: sc.temp.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des capteurs de température (scEnclTempTable).'
+          item_prototypes:
+            - uuid: 0295c07ebb62452b954ae92a149db003
+              name: 'Temperature {#SENSOR}'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.23.1.5.{#SNMPINDEX}'
+              key: 'sc.temp.value[{#SNMPINDEX}]'
+              delay: 3m
+              history: 90d
+              units: °C
+              tags:
+                - tag: Application
+                  value: 'System Health'
+              trigger_prototypes:
+                - uuid: b15516a86f3a4b7c987dbb3ce5d5f18c
+                  expression: 'avg(/PIC - Dell Compellent SC by SNMP/sc.temp.value[{#SNMPINDEX}],#3)>{$TEMP_CRIT}'
+                  name: 'Temperature {#SENSOR} is CRITICAL on {HOST.NAME}'
+                  opdata: 'Current: {ITEM.LASTVALUE1} °C'
+                  priority: HIGH
+                - uuid: 183bfeab5e534c90b60e95accd7439e4
+                  expression: 'avg(/PIC - Dell Compellent SC by SNMP/sc.temp.value[{#SNMPINDEX}],#3)>{$TEMP_WARN}'
+                  name: 'Temperature {#SENSOR} is HIGH on {HOST.NAME}'
+                  opdata: 'Current: {ITEM.LASTVALUE1} °C'
+                  priority: WARNING
+                  dependencies:
+                    - name: 'Temperature {#SENSOR} is CRITICAL on {HOST.NAME}'
+                      expression: 'avg(/PIC - Dell Compellent SC by SNMP/sc.temp.value[{#SNMPINDEX}],#3)>{$TEMP_CRIT}'
+            - uuid: 0d07f754613f42698694ba5879208985
+              name: 'Temperature {#SENSOR} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.23.1.3.{#SNMPINDEX}'
+              key: 'sc.temp.status[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              valuemap:
+                name: 'Compellent ScStatus'
+              tags:
+                - tag: Application
+                  value: 'System Health'
+        - uuid: 98c0674d9c24474aa5fba94a1bcb665f
+          name: Fans
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#FAN},1.3.6.1.4.1.16139.2.20.1.4]'
+          key: sc.fan.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des ventilateurs (scEnclFanTable).'
+          item_prototypes:
+            - uuid: 019b4637397b4fe1be8d4c368f0e1925
+              name: 'Fan {#FAN} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.20.1.3.{#SNMPINDEX}'
+              key: 'sc.fan.status[{#SNMPINDEX}]'
+              delay: 60s
+              history: 90d
+              description: '[1] up  [2] down  [3] degraded'
+              valuemap:
+                name: 'Compellent ScStatus'
+              tags:
+                - tag: Application
+                  value: 'System Health'
+              trigger_prototypes:
+                - uuid: 933af28300ae41cb8e653ef88ad80d03
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.fan.status[{#SNMPINDEX}])<>1'
+                  name: 'Fan {#FAN} problem on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+            - uuid: b063a9a8c4c248b19112cfcb74f406ea
+              name: 'Fan {#FAN} Speed'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.20.1.5.{#SNMPINDEX}'
+              key: 'sc.fan.speed[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              value_type: TEXT
+              description: 'Vitesse : high, Medium, Low, Off, Unknown.'
+              tags:
+                - tag: Application
+                  value: 'System Health'
+        - uuid: 99305ddf4d48464bb41dcbaa329835c0
+          name: 'Power Supplies'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#PSU},1.3.6.1.4.1.16139.2.21.1.4]'
+          key: sc.psu.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des blocs d''alimentation (scEnclPowerTable).'
+          item_prototypes:
+            - uuid: f166e729607341c5a7705c3ca7f367ef
+              name: 'Power Supply {#PSU} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.21.1.3.{#SNMPINDEX}'
+              key: 'sc.psu.status[{#SNMPINDEX}]'
+              delay: 60s
+              history: 90d
+              description: '[1] up  [2] down  [3] degraded'
+              valuemap:
+                name: 'Compellent ScStatus'
+              tags:
+                - tag: Application
+                  value: 'System Health'
+              trigger_prototypes:
+                - uuid: eaae0aafcd83483bb0a053d87a7cd160
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.psu.status[{#SNMPINDEX}])<>1'
+                  name: 'Power Supply {#PSU} problem on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+        - uuid: 81739a114e654bc8ac0308bcbb003882
+          name: Volumes
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#VOLUME},1.3.6.1.4.1.16139.2.26.1.4]'
+          key: sc.volume.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des volumes (scVolumeTable).'
+          item_prototypes:
+            - uuid: 92aef0a7121546d2b8740a7dcb09ec72
+              name: 'Volume {#VOLUME} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.26.1.3.{#SNMPINDEX}'
+              key: 'sc.volume.status[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              description: '[1] up  [2] down  [3] degraded'
+              valuemap:
+                name: 'Compellent ScStatus'
+              tags:
+                - tag: Application
+                  value: Volume
+              trigger_prototypes:
+                - uuid: 59b4e1d7d57e47a0a0a7040647ae9c31
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.volume.status[{#SNMPINDEX}])=2'
+                  name: 'Volume {#VOLUME} is DOWN on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+                - uuid: 138ade0e2d114ddfaccbb03e0372d240
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.volume.status[{#SNMPINDEX}])=3'
+                  name: 'Volume {#VOLUME} is DEGRADED on {HOST.NAME}'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+      tags:
+        - tag: class
+          value: storage
+        - tag: target
+          value: SAN
+        - tag: vendor
+          value: Dell
+      macros:
+        - macro: '{$SNMP_COMMUNITY}'
+          value: picinformatique
+          description: 'Communauté SNMP v2c'
+        - macro: '{$TEMP_CRIT}'
+          value: '45'
+          description: 'Température critique (°C)'
+        - macro: '{$TEMP_WARN}'
+          value: '38'
+          description: 'Température d''alerte (°C)'
+      valuemaps:
+        - uuid: 61ba905d153f4cfaa25d87700124f3b4
+          name: 'Compellent ScStatus'
+          mappings:
+            - value: '1'
+              newvalue: up
+            - value: '2'
+              newvalue: down
+            - value: '3'
+              newvalue: degraded
+        - uuid: f86fcac312dc46e1b720b4e879a5ac12
+          name: 'Compellent Global Status'
+          mappings:
+            - value: '1'
+              newvalue: other
+            - value: '2'
+              newvalue: unknown
+            - value: '3'
+              newvalue: ok
+            - value: '4'
+              newvalue: noncritical
+            - value: '5'
+              newvalue: critical
+            - value: '6'
+              newvalue: nonrecoverable
+        - uuid: c714707e75e2487fadb301042fa3a8b6
+          name: 'Compellent TruthValue'
+          mappings:
+            - value: '1'
+              newvalue: 'true'
+            - value: '2'
+              newvalue: 'false'
