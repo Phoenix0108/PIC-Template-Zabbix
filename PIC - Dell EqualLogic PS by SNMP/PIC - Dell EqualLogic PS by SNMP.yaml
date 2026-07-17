@@ -138,6 +138,14 @@ zabbix_export:
               name: 'Member health is CRITICAL on {HOST.NAME}'
               opdata: 'Current status: {ITEM.LASTVALUE1}'
               priority: HIGH
+              description: |
+                Santé globale du membre (parapluie). S'allume dès qu'un composant est en défaut, donc
+                redondant avec les déclencheurs détaillés (RAID, disque, alimentation…). Le tag
+                alarm_role=umbrella permet de l'exclure de la création de ticket pour ne garder qu'un
+                ticket unique et détaillé.
+              tags:
+                - tag: alarm_role
+                  value: umbrella
             - uuid: 239b7e397be14203b9c1060013e111c5
               expression: 'last(/PIC - Dell EqualLogic PS by SNMP/member.health[eqlMemberHealthStatus.1])=2'
               name: 'Member health is in WARNING state on {HOST.NAME}'
