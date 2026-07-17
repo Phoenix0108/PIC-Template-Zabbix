@@ -464,6 +464,176 @@ zabbix_export:
                   name: 'Volume {#VOLUME} is DEGRADED on {HOST.NAME}'
                   opdata: 'Current status: {ITEM.LASTVALUE1}'
                   priority: AVERAGE
+        - uuid: a4e257be6e31418ba3e331d275670e08
+          name: 'Active Alerts'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#ALERTDEF},1.3.6.1.4.1.16139.2.46.1.5,{#ALERTACTIVE},1.3.6.1.4.1.16139.2.46.1.11,{#ALERTCAT},1.3.6.1.4.1.16139.2.46.1.6]'
+          key: sc.alert.discovery
+          delay: 5m
+          lifetime: 7d
+          enabled_lifetime_type: DISABLE_NEVER
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: '{#ALERTACTIVE}'
+                value: '^1$'
+                formulaid: A
+              - macro: '{#ALERTCAT}'
+                value: '^(0|4|5)$'
+                formulaid: B
+          description: |
+            Découverte des alertes actives de Storage Center (scAlertTable) — filet de sécurité pour
+            les conditions SANS table matérielle dédiée (ports/chemins, réplication, licence, batterie/
+            cache, système/logiciel…).
+            Filtre : alertes ACTIVES (scAlertActive=true) ET catégories connectivity(0) / system(4) /
+            unknown(5). Les catégories disk(1) / hardware(2) / storage(3) sont volontairement EXCLUES
+            car déjà couvertes par les déclencheurs détaillés (disques, contrôleurs, alims, volumes…),
+            ce qui évite les tickets en double. Pour faire de la table d'alertes la source unique et
+            exhaustive, remplacer le filtre catégorie par « matches .* » (au risque de doublons matériels).
+          item_prototypes:
+            - uuid: 1463e7d4835449cc8008cd4c78933019
+              name: 'Alert [{#ALERTDEF}] Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.46.1.3.{#SNMPINDEX}'
+              key: 'sc.alert.status[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              description: '[0] complete  [1] critical  [2] degraded  [3] deleting  [4] down  [5] emergency  [6] inform  [7] okay  [8] unavailable  [9] unknown'
+              valuemap:
+                name: 'Compellent Alert Status'
+              tags:
+                - tag: Application
+                  value: Alerts
+              trigger_prototypes:
+                - uuid: e5d2cee55648474eb370d6e40833acfb
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.alert.status[{#SNMPINDEX}])=5 and last(/PIC - Dell Compellent SC by SNMP/sc.alert.active[{#SNMPINDEX}])=1'
+                  name: 'SC alert (EMERGENCY) [{#ALERTDEF}] on {HOST.NAME}'
+                  opdata: 'Message : {?last(/PIC - Dell Compellent SC by SNMP/sc.alert.message[{#SNMPINDEX}])}'
+                  priority: DISASTER
+                - uuid: 38c688c42dd14e4496498fd4429bf824
+                  expression: '(last(/PIC - Dell Compellent SC by SNMP/sc.alert.status[{#SNMPINDEX}])=1 or last(/PIC - Dell Compellent SC by SNMP/sc.alert.status[{#SNMPINDEX}])=4) and last(/PIC - Dell Compellent SC by SNMP/sc.alert.active[{#SNMPINDEX}])=1'
+                  name: 'SC alert (CRITICAL) [{#ALERTDEF}] on {HOST.NAME}'
+                  opdata: 'Message : {?last(/PIC - Dell Compellent SC by SNMP/sc.alert.message[{#SNMPINDEX}])}'
+                  priority: HIGH
+                - uuid: 617e7fc236904f16b7b280c7c12c9e62
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.alert.status[{#SNMPINDEX}])=2 and last(/PIC - Dell Compellent SC by SNMP/sc.alert.active[{#SNMPINDEX}])=1'
+                  name: 'SC alert (DEGRADED) [{#ALERTDEF}] on {HOST.NAME}'
+                  opdata: 'Message : {?last(/PIC - Dell Compellent SC by SNMP/sc.alert.message[{#SNMPINDEX}])}'
+                  priority: AVERAGE
+            - uuid: e44cf1c9dda94337a82b105937df0e89
+              name: 'Alert [{#ALERTDEF}] Message'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.46.1.8.{#SNMPINDEX}'
+              key: 'sc.alert.message[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              value_type: TEXT
+              description: 'Texte de l''alerte Storage Center (scAlertMessage), affiché dans l''opdata des déclencheurs.'
+              tags:
+                - tag: Application
+                  value: Alerts
+            - uuid: 2d0f6950e7a4488d89415e1a85b9fbd5
+              name: 'Alert [{#ALERTDEF}] Category'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.46.1.6.{#SNMPINDEX}'
+              key: 'sc.alert.category[{#SNMPINDEX}]'
+              delay: 1h
+              history: 90d
+              description: '[0] connectivity  [1] disk  [2] hardware  [3] storage  [4] system  [5] unknown'
+              valuemap:
+                name: 'Compellent Alert Category'
+              tags:
+                - tag: Application
+                  value: Alerts
+            - uuid: 2857cc8de6154c6085ecadc202c49657
+              name: 'Alert [{#ALERTDEF}] Active'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.46.1.11.{#SNMPINDEX}'
+              key: 'sc.alert.active[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              valuemap:
+                name: 'Compellent TruthValue'
+              tags:
+                - tag: Application
+                  value: Alerts
+        - uuid: c9c45e14bf8645d7bb40980473114371
+          name: 'Disk Folders (capacity)'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#DFNBR},1.3.6.1.4.1.16139.2.32.1.2]'
+          key: sc.capacity.discovery
+          delay: 1h
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'Découverte des disk folders et de leur usage (scDiskFolderSUTable). Espace exposé en Go par la MIB, converti en octets.'
+          item_prototypes:
+            - uuid: fd77c180db444d0b8f16ea686819a877
+              name: 'Disk Folder #{#DFNBR} Total Space'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.32.1.3.{#SNMPINDEX}'
+              key: 'sc.capacity.total[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              units: B
+              preprocessing:
+                - type: MULTIPLIER
+                  parameters:
+                    - '1073741824'
+              tags:
+                - tag: Application
+                  value: Capacity
+            - uuid: 1a5f1150c30745919218c376c8a80602
+              name: 'Disk Folder #{#DFNBR} Used Space'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.32.1.4.{#SNMPINDEX}'
+              key: 'sc.capacity.used[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              units: B
+              preprocessing:
+                - type: MULTIPLIER
+                  parameters:
+                    - '1073741824'
+              tags:
+                - tag: Application
+                  value: Capacity
+            - uuid: bc17588df4ab4830af04c6f8e283ebc7
+              name: 'Disk Folder #{#DFNBR} Free Space'
+              type: CALCULATED
+              key: 'sc.capacity.free[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              units: B
+              params: 'last(//sc.capacity.total[{#SNMPINDEX}])-last(//sc.capacity.used[{#SNMPINDEX}])'
+              tags:
+                - tag: Application
+                  value: Capacity
+            - uuid: fcafa14486574741ab8d90eeb59b56fa
+              name: 'Disk Folder #{#DFNBR} Used (%)'
+              type: CALCULATED
+              key: 'sc.capacity.pct[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              value_type: FLOAT
+              units: '%'
+              params: 'last(//sc.capacity.used[{#SNMPINDEX}])/last(//sc.capacity.total[{#SNMPINDEX}])*100'
+              tags:
+                - tag: Application
+                  value: Capacity
+              trigger_prototypes:
+                - uuid: bcd4b43128b94f3b8759d6646f6d12f2
+                  expression: 'min(/PIC - Dell Compellent SC by SNMP/sc.capacity.pct[{#SNMPINDEX}],30m)>{$STORAGE_UTIL_HIGH}'
+                  name: 'Disk Folder #{#DFNBR} usage is CRITICAL on {HOST.NAME}'
+                  opdata: 'Current usage: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+                - uuid: 96b0f513481d474ab8fc8aa12e9e339b
+                  expression: 'min(/PIC - Dell Compellent SC by SNMP/sc.capacity.pct[{#SNMPINDEX}],30m)>{$STORAGE_UTIL_WARN}'
+                  name: 'Disk Folder #{#DFNBR} usage is HIGH on {HOST.NAME}'
+                  opdata: 'Current usage: {ITEM.LASTVALUE1}'
+                  priority: WARNING
+                  dependencies:
+                    - name: 'Disk Folder #{#DFNBR} usage is CRITICAL on {HOST.NAME}'
+                      expression: 'min(/PIC - Dell Compellent SC by SNMP/sc.capacity.pct[{#SNMPINDEX}],30m)>{$STORAGE_UTIL_HIGH}'
       tags:
         - tag: class
           value: storage
@@ -475,6 +645,12 @@ zabbix_export:
         - macro: '{$SNMP_COMMUNITY}'
           value: picinformatique
           description: 'Communauté SNMP v2c'
+        - macro: '{$STORAGE_UTIL_HIGH}'
+          value: '90'
+          description: 'Seuil critique d''utilisation d''un disk folder (%)'
+        - macro: '{$STORAGE_UTIL_WARN}'
+          value: '80'
+          description: 'Seuil d''alerte d''utilisation d''un disk folder (%)'
         - macro: '{$TEMP_CRIT}'
           value: '45'
           description: 'Température critique (°C)'
@@ -513,3 +689,41 @@ zabbix_export:
               newvalue: 'true'
             - value: '2'
               newvalue: 'false'
+        - uuid: 34fa9070e4584977ba1baa65472c715a
+          name: 'Compellent Alert Status'
+          mappings:
+            - value: '0'
+              newvalue: complete
+            - value: '1'
+              newvalue: critical
+            - value: '2'
+              newvalue: degraded
+            - value: '3'
+              newvalue: deleting
+            - value: '4'
+              newvalue: down
+            - value: '5'
+              newvalue: emergency
+            - value: '6'
+              newvalue: inform
+            - value: '7'
+              newvalue: okay
+            - value: '8'
+              newvalue: unavailable
+            - value: '9'
+              newvalue: unknown
+        - uuid: 6b3e1d0e94b241e5a1f86b7c22a73e47
+          name: 'Compellent Alert Category'
+          mappings:
+            - value: '0'
+              newvalue: connectivity
+            - value: '1'
+              newvalue: disk
+            - value: '2'
+              newvalue: hardware
+            - value: '3'
+              newvalue: storage
+            - value: '4'
+              newvalue: system
+            - value: '5'
+              newvalue: unknown

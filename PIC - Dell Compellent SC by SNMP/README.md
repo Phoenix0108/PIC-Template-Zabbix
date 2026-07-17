@@ -12,10 +12,10 @@
 | Fichier | `PIC - Dell Compellent SC by SNMP.yaml` |
 | Groupes | PIC informatique - Template, Templates/Storage |
 | Éléments (items) | 9 |
-| Règles de découverte | 7 |
+| Règles de découverte | 9 |
 | Déclencheurs | 2 (+ prototypes) |
-| Macros | 3 |
-| Cartographies de valeurs | 3 |
+| Macros | 5 |
+| Cartographies de valeurs | 5 |
 | Tags | class: storage, target: SAN, vendor: Dell |
 
 ## Description
@@ -46,6 +46,8 @@ Version    : 1.0 — Zabbix 7.4
 | Macro | Valeur par défaut | Description |
 |---|---|---|
 | `{$SNMP_COMMUNITY}` | picinformatique | Communauté SNMP v2c |
+| `{$STORAGE_UTIL_HIGH}` | 90 | Seuil critique d'utilisation d'un disk folder (%) |
+| `{$STORAGE_UTIL_WARN}` | 80 | Seuil d'alerte d'utilisation d'un disk folder (%) |
 | `{$TEMP_CRIT}` | 45 | Température critique (°C) |
 | `{$TEMP_WARN}` | 38 | Température d'alerte (°C) |
 
@@ -72,8 +74,21 @@ Version    : 1.0 — Zabbix 7.4
 | Fans | `1.3.6.1.4.1.16139.2.20.1.4` | Status, Speed |
 | Power Supplies | `1.3.6.1.4.1.16139.2.21.1.4` | Status |
 | Volumes | `1.3.6.1.4.1.16139.2.26.1.4` | Status |
+| Active Alerts | `1.3.6.1.4.1.16139.2.46.1.5` | Status, Message, Category, Active |
+| Disk Folders (capacity) | `1.3.6.1.4.1.16139.2.32.1.2` | Total, Used, Free, Used (%) |
 
 > La taille disque est exposée en Go par la MIB et convertie en octets (× 1 073 741 824).
+
+> **Filet de sécurité — Alertes actives** : la LLD `Active Alerts` (scAlertTable) remonte les
+> conditions **sans table matérielle dédiée** (ports/chemins, réplication, licence, batterie/cache,
+> système). Elle est filtrée sur les alertes **actives** ET les catégories `connectivity(0)` /
+> `system(4)` / `unknown(5)` : les catégories `disk`/`hardware`/`storage` sont exclues car déjà
+> couvertes par les déclencheurs détaillés, ce qui **évite les tickets en double**. Pour faire de la
+> table d'alertes la source unique et exhaustive, élargir le filtre catégorie à `.*` (au risque de
+> doublons matériels). Le message Dell (`scAlertMessage`) est affiché dans l'opdata des alertes.
+
+> **Capacité** : la LLD `Disk Folders (capacity)` (scDiskFolderSUTable) fournit total / utilisé /
+> libre / % consommé par disk folder, avec seuils `{$STORAGE_UTIL_WARN}` / `{$STORAGE_UTIL_HIGH}`.
 
 > **Détection disque (Intègre)** : l'alerte disque se base sur `scDiskHealthy = false(2)` — l'équivalent
 > exact de la colonne « Intègre : Non » du Dell Storage Manager. Un disque sain volontairement retiré du
@@ -98,8 +113,13 @@ Version    : 1.0 — Zabbix 7.4
 | Power Supply {#PSU} problem | Élevé |
 | Temperature {#SENSOR} is CRITICAL | Élevé |
 | Volume {#VOLUME} is DOWN | Élevé |
+| SC alert (EMERGENCY) [{#ALERTDEF}] | Désastre |
+| SC alert (CRITICAL) [{#ALERTDEF}] | Élevé |
+| Disk Folder #{#DFNBR} usage is CRITICAL | Élevé |
 | Global status is non-critical | Moyen |
 | Enclosure {#ENCL} is DEGRADED | Moyen |
+| SC alert (DEGRADED) [{#ALERTDEF}] | Moyen |
+| Disk Folder #{#DFNBR} usage is HIGH | Avertissement |
 | Fan {#FAN} problem | Moyen |
 | Volume {#VOLUME} is DEGRADED | Moyen |
 | Temperature {#SENSOR} is HIGH | Avertissement |
@@ -113,6 +133,8 @@ Version    : 1.0 — Zabbix 7.4
 | Compellent ScStatus | 1→up, 2→down, 3→degraded |
 | Compellent Global Status | 1→other, 2→unknown, 3→ok, 4→noncritical, 5→critical, 6→nonrecoverable |
 | Compellent TruthValue | 1→true, 2→false |
+| Compellent Alert Status | 0→complete, 1→critical, 2→degraded, 4→down, 5→emergency, 6→inform, 7→okay, … |
+| Compellent Alert Category | 0→connectivity, 1→disk, 2→hardware, 3→storage, 4→system, 5→unknown |
 
 ---
 *Documentation générée à partir de l'export Zabbix. OID issus de la COMPELLENT-MIB (Dell Compellent, entreprise 16139).*
