@@ -66,7 +66,7 @@ Version    : 1.0 — Zabbix 7.4
 | Nom | OID de découverte | Prototypes |
 |---|---|---|
 | Controllers | `1.3.6.1.4.1.16139.2.13.1.4` | Status, Model |
-| Physical Disks | `1.3.6.1.4.1.16139.2.14.1.4` | Status, Healthy, Size |
+| Physical Disks | `1.3.6.1.4.1.16139.2.14.1.4` | Healthy, Position (live), Status, Size |
 | Enclosures | `1.3.6.1.4.1.16139.2.15.1.4` | Status |
 | Temperature Sensors | `1.3.6.1.4.1.16139.2.23.1.4` | Value, Status |
 | Fans | `1.3.6.1.4.1.16139.2.20.1.4` | Status, Speed |
@@ -75,6 +75,17 @@ Version    : 1.0 — Zabbix 7.4
 
 > La taille disque est exposée en Go par la MIB et convertie en octets (× 1 073 741 824).
 
+> **Détection disque (Intègre)** : l'alerte disque se base sur `scDiskHealthy = false(2)` — l'équivalent
+> exact de la colonne « Intègre : Non » du Dell Storage Manager. Un disque sain volontairement retiré du
+> service (down mais intègre) ne déclenche donc pas d'alerte. Le statut de service (`scDiskStatus`) reste
+> collecté à titre informatif.
+>
+> **Étiquetage fiable** : l'index interne `scDiskIndex` de Compellent n'est pas stable (réattribué lors des
+> rescans/failover), ce qui peut faire dériver le nom mémorisé à la découverte. La position réelle
+> (`scDiskNamePosition`) est donc **relue en direct** au même index que le statut et affichée dans l'`opdata`
+> de l'alerte, de sorte que le disque désigné est toujours le bon. La découverte tourne toutes les 30 min
+> pour resynchroniser rapidement les libellés.
+
 ## Déclencheurs (triggers)
 
 | Nom | Sévérité |
@@ -82,13 +93,12 @@ Version    : 1.0 — Zabbix 7.4
 | Controller {#CTLR} is DOWN | Désastre |
 | Global status is CRITICAL | Élevé |
 | Controller {#CTLR} is DEGRADED | Élevé |
-| Disk {#DISK} is DOWN | Élevé |
+| Disk {#DISK} is NOT healthy (Intègre = Non) | Élevé |
 | Enclosure {#ENCL} is DOWN | Élevé |
 | Power Supply {#PSU} problem | Élevé |
 | Temperature {#SENSOR} is CRITICAL | Élevé |
 | Volume {#VOLUME} is DOWN | Élevé |
 | Global status is non-critical | Moyen |
-| Disk {#DISK} is DEGRADED / not healthy | Moyen |
 | Enclosure {#ENCL} is DEGRADED | Moyen |
 | Fan {#FAN} problem | Moyen |
 | Volume {#VOLUME} is DEGRADED | Moyen |

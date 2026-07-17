@@ -74,11 +74,15 @@ Version    : 1.0 — Zabbix 7.4
 
 > Les capacités sont exposées en Mo par la MIB et converties en octets (× 1 048 576).
 
+> **Étiquetage disque fiable** : le slot physique est relu en direct au même index que le statut et affiché
+> dans l'`opdata` des alertes disque, afin que l'alerte désigne toujours le bon disque même si l'index de la
+> table venait à glisser. La découverte tourne toutes les 30 min.
+
 ## Règles de découverte (LLD)
 
 | Nom | OID de découverte | Prototypes |
 |---|---|---|
-| Physical Disks | `1.3.6.1.4.1.12740.3.1.1.1.10` | Status, Size |
+| Physical Disks | `1.3.6.1.4.1.12740.3.1.1.1.10` | Status, Slot (live), Size |
 | Temperature Sensors | `1.3.6.1.4.1.12740.2.1.6.1.2` | Value |
 | Fans | `1.3.6.1.4.1.12740.2.1.7.1.2` | Speed |
 | Power Supplies | `1.3.6.1.4.1.12740.2.1.8.1.2` | Status |

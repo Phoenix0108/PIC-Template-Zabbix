@@ -318,10 +318,13 @@ zabbix_export:
           type: SNMP_AGENT
           snmp_oid: 'discovery[{#DISKSLOT},1.3.6.1.4.1.12740.3.1.1.1.10]'
           key: eql.disk.discovery
-          delay: 1h
+          delay: 30m
           lifetime: 30d
           enabled_lifetime_type: DISABLE_NEVER
-          description: 'Découverte des disques physiques (EQLDISK-MIB).'
+          description: |
+            Découverte des disques physiques (EQLDISK-MIB).
+            La position ({#DISKSLOT}) est aussi relue en direct au même index que le statut et affichée
+            dans l'opdata des alertes, pour garantir que l'étiquette désigne toujours le bon disque.
           item_prototypes:
             - uuid: a1e49fc08b5e48b19a5526437f31a647
               name: 'Disk {#DISKSLOT} Status'
@@ -340,13 +343,25 @@ zabbix_export:
                 - uuid: f702ffac410f43688565950223b7ce94
                   expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status[{#SNMPINDEX}])=3'
                   name: 'Disk {#DISKSLOT} has FAILED on {HOST.NAME}'
-                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  opdata: 'Disque réel : slot {?last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.slot[{#SNMPINDEX}])} — statut : {ITEM.LASTVALUE1}'
                   priority: HIGH
                 - uuid: 1793384819ec4eb389382644dcd3cfd5
                   expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status[{#SNMPINDEX}])=4 or last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status[{#SNMPINDEX}])=9'
                   name: 'Disk {#DISKSLOT} is off-line/unhealthy on {HOST.NAME}'
-                  opdata: 'Current status: {ITEM.LASTVALUE1}'
+                  opdata: 'Disque réel : slot {?last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.slot[{#SNMPINDEX}])} — statut : {ITEM.LASTVALUE1}'
                   priority: AVERAGE
+            - uuid: 1ab580e2257f4779ba8dfa1c22ebf65b
+              name: 'Disk {#DISKSLOT} Slot'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.12740.3.1.1.1.10.{#SNMPINDEX}'
+              key: 'eql.disk.slot[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              value_type: TEXT
+              description: 'Numéro de slot relu en direct au même index que le statut (étiquette fiable pour les alertes).'
+              tags:
+                - tag: Application
+                  value: Disk
             - uuid: 169566379b354fff9c3259a07b741ada
               name: 'Disk {#DISKSLOT} Size'
               type: SNMP_AGENT

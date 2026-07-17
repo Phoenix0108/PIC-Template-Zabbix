@@ -198,35 +198,15 @@ zabbix_export:
           type: SNMP_AGENT
           snmp_oid: 'discovery[{#DISK},1.3.6.1.4.1.16139.2.14.1.4]'
           key: sc.disk.discovery
-          delay: 1h
+          delay: 30m
           lifetime: 30d
           enabled_lifetime_type: DISABLE_NEVER
-          description: 'Découverte des disques physiques (scDiskTable). {#DISK} au format enceinte-disque.'
+          description: |
+            Découverte des disques physiques (scDiskTable). {#DISK} = position enceinte-disque (ee-dd).
+            NB : l'index interne scDiskIndex de Compellent n'est pas stable (réattribué aux rescans).
+            La position réelle est donc relue en direct (item Position) et affichée dans l'opdata des alertes,
+            afin que l'étiquette ne puisse jamais désigner le mauvais disque.
           item_prototypes:
-            - uuid: 90b1002f9f0e4d108cbf8a1de2d8fc9e
-              name: 'Disk {#DISK} Status'
-              type: SNMP_AGENT
-              snmp_oid: '1.3.6.1.4.1.16139.2.14.1.3.{#SNMPINDEX}'
-              key: 'sc.disk.status[{#SNMPINDEX}]'
-              delay: 5m
-              history: 90d
-              description: '[1] up  [2] down  [3] degraded'
-              valuemap:
-                name: 'Compellent ScStatus'
-              tags:
-                - tag: Application
-                  value: Disk
-              trigger_prototypes:
-                - uuid: 3b6063cc77af432a8069b52e9f24312e
-                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.disk.status[{#SNMPINDEX}])=2'
-                  name: 'Disk {#DISK} is DOWN on {HOST.NAME}'
-                  opdata: 'Current status: {ITEM.LASTVALUE1}'
-                  priority: HIGH
-                - uuid: 7c7423bd286344a290b6ca2377671488
-                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.disk.status[{#SNMPINDEX}])=3'
-                  name: 'Disk {#DISK} is DEGRADED on {HOST.NAME}'
-                  opdata: 'Current status: {ITEM.LASTVALUE1}'
-                  priority: AVERAGE
             - uuid: e5d0b0dfecfa4488a67c3dda29607298
               name: 'Disk {#DISK} Healthy'
               type: SNMP_AGENT
@@ -234,7 +214,7 @@ zabbix_export:
               key: 'sc.disk.healthy[{#SNMPINDEX}]'
               delay: 5m
               history: 90d
-              description: '[1] true (healthy)  [2] false (not healthy)'
+              description: '[1] true (intègre)  [2] false (non intègre) — équivalent de la colonne « Intègre » du GUI Dell.'
               valuemap:
                 name: 'Compellent TruthValue'
               tags:
@@ -243,8 +223,35 @@ zabbix_export:
               trigger_prototypes:
                 - uuid: 8cd9ad682077438c824093a742b2bf5e
                   expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.disk.healthy[{#SNMPINDEX}])=2'
-                  name: 'Disk {#DISK} reports not healthy on {HOST.NAME}'
-                  priority: AVERAGE
+                  name: 'Disk {#DISK} is NOT healthy on {HOST.NAME}'
+                  opdata: 'Disque réel : {?last(/PIC - Dell Compellent SC by SNMP/sc.disk.position[{#SNMPINDEX}])} — Intègre : Non'
+                  priority: HIGH
+                  description: 'Le disque signale « Intègre : Non » (scDiskHealthy=false). Le disque physique concerné est indiqué en opdata (position relue en direct).'
+            - uuid: da7d4f5fb4c44dea9c97b04ee2a78632
+              name: 'Disk {#DISK} Position'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.14.1.4.{#SNMPINDEX}'
+              key: 'sc.disk.position[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              value_type: TEXT
+              description: 'Position enceinte-disque relue en direct au même index que le statut (source d''étiquette fiable pour les alertes).'
+              tags:
+                - tag: Application
+                  value: Disk
+            - uuid: 90b1002f9f0e4d108cbf8a1de2d8fc9e
+              name: 'Disk {#DISK} Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.16139.2.14.1.3.{#SNMPINDEX}'
+              key: 'sc.disk.status[{#SNMPINDEX}]'
+              delay: 5m
+              history: 90d
+              description: '[1] up  [2] down  [3] degraded (état de service — informatif ; l''alerte se base sur « Intègre »).'
+              valuemap:
+                name: 'Compellent ScStatus'
+              tags:
+                - tag: Application
+                  value: Disk
             - uuid: 96d78709edde40ea9fe4cd6b8da0d6bc
               name: 'Disk {#DISK} Size'
               type: SNMP_AGENT
