@@ -45,6 +45,7 @@ Version    : 1.0 — Zabbix 7.4
 
 | Macro | Valeur par défaut | Description |
 |---|---|---|
+| `{$SC_ALERT_DEF_EXCLUDE}` | `(?i)(joinfailed\|directory\|ldap\|kerberos)` | Regex des définitions d'alertes à ne PAS remonter (par défaut : alertes Active Directory / annuaire) |
 | `{$SNMP_COMMUNITY}` | picinformatique | Communauté SNMP v2c |
 | `{$STORAGE_UTIL_HIGH}` | 90 | Seuil critique d'utilisation d'un disk folder (%) |
 | `{$STORAGE_UTIL_WARN}` | 80 | Seuil d'alerte d'utilisation d'un disk folder (%) |
@@ -83,9 +84,12 @@ Version    : 1.0 — Zabbix 7.4
 > conditions **sans table matérielle dédiée** (ports/chemins, réplication, licence, batterie/cache,
 > système). Elle est filtrée sur les alertes **actives** ET les catégories `connectivity(0)` /
 > `system(4)` / `unknown(5)` : les catégories `disk`/`hardware`/`storage` sont exclues car déjà
-> couvertes par les déclencheurs détaillés, ce qui **évite les tickets en double**. Pour faire de la
-> table d'alertes la source unique et exhaustive, élargir le filtre catégorie à `.*` (au risque de
-> doublons matériels). Le message Dell (`scAlertMessage`) est affiché dans l'opdata des alertes.
+> couvertes par les déclencheurs détaillés, ce qui **évite les tickets en double**. Un filtre
+> supplémentaire `{$SC_ALERT_DEF_EXCLUDE}` exclut certaines définitions par regex — **par défaut les
+> alertes Active Directory / annuaire** (`JoinFailedAlert`, etc.), les baies n'étant jamais jointes à
+> un domaine. Pour faire de la table d'alertes la source unique et exhaustive, élargir le filtre
+> catégorie à `.*` (au risque de doublons matériels). Le message Dell (`scAlertMessage`) est affiché
+> dans l'opdata des alertes.
 
 > **Capacité** : la LLD `Disk Folders (capacity)` (scDiskFolderSUTable) fournit total / utilisé /
 > libre / % consommé par disk folder, avec seuils `{$STORAGE_UTIL_WARN}` / `{$STORAGE_UTIL_HIGH}`.

@@ -481,6 +481,10 @@ zabbix_export:
               - macro: '{#ALERTCAT}'
                 value: '^(0|4|5)$'
                 formulaid: B
+              - macro: '{#ALERTDEF}'
+                value: '{$SC_ALERT_DEF_EXCLUDE}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: C
           description: |
             Découverte des alertes actives de Storage Center (scAlertTable) — filet de sécurité pour
             les conditions SANS table matérielle dédiée (ports/chemins, réplication, licence, batterie/
@@ -642,6 +646,9 @@ zabbix_export:
         - tag: vendor
           value: Dell
       macros:
+        - macro: '{$SC_ALERT_DEF_EXCLUDE}'
+          value: '(?i)(joinfailed|directory|ldap|kerberos)'
+          description: 'Regex des définitions d''alertes (scAlertDefinition) à NE PAS remonter/ticketer. Par défaut : alertes Active Directory / annuaire (baies jamais jointes à un domaine). Ajouter d''autres motifs séparés par « | ».'
         - macro: '{$SNMP_COMMUNITY}'
           value: picinformatique
           description: 'Communauté SNMP v2c'
