@@ -100,10 +100,11 @@ Version    : 1.0 — Zabbix 7.4
 > collecté à titre informatif.
 >
 > **Étiquetage fiable** : l'index interne `scDiskIndex` de Compellent n'est pas stable (réattribué lors des
-> rescans/failover), ce qui peut faire dériver le nom mémorisé à la découverte. La position réelle
-> (`scDiskNamePosition`) est donc **relue en direct** au même index que le statut et affichée dans l'`opdata`
-> de l'alerte, de sorte que le disque désigné est toujours le bon. La découverte tourne toutes les 30 min
-> pour resynchroniser rapidement les libellés.
+> rescans/failover). Les items sont donc **indexés sur la position physique** (`{#DISK}`, ex.
+> `sc.disk.healthy["01-03"]`) et non sur l'index SNMP : la clé reste constante à vie, seul l'OID est
+> réactualisé quand l'index bouge. Résultat : **plus aucun item orphelin ni alerte mal étiquetée**. La
+> position est en plus relue en direct dans l'`opdata`. Ce principe s'applique à toutes les tables
+> matérielles (contrôleurs, enceintes, ventilateurs, alims, volumes, capacité).
 
 ## Déclencheurs (triggers)
 

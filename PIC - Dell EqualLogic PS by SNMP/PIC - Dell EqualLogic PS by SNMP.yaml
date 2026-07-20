@@ -338,7 +338,7 @@ zabbix_export:
               name: 'Disk {#DISKSLOT} Status'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.12740.3.1.1.1.8.{#SNMPINDEX}'
-              key: 'eql.disk.status[{#SNMPINDEX}]'
+              key: 'eql.disk.status["{#DISKSLOT}"]'
               delay: 5m
               history: 90d
               description: '[1] on-line  [2] spare  [3] failed  [4] off-line  [8] unsupported-version  [9] unhealthy'
@@ -349,20 +349,20 @@ zabbix_export:
                   value: Disk
               trigger_prototypes:
                 - uuid: f702ffac410f43688565950223b7ce94
-                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status[{#SNMPINDEX}])=3'
+                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status["{#DISKSLOT}"])=3'
                   name: 'Disk {#DISKSLOT} has FAILED on {HOST.NAME}'
-                  opdata: 'Disque réel : slot {?last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.slot[{#SNMPINDEX}])} — statut : {ITEM.LASTVALUE1}'
+                  opdata: 'Disque réel : slot {?last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.slot["{#DISKSLOT}"])} — statut : {ITEM.LASTVALUE1}'
                   priority: HIGH
                 - uuid: 1793384819ec4eb389382644dcd3cfd5
-                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status[{#SNMPINDEX}])=4 or last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status[{#SNMPINDEX}])=9'
+                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status["{#DISKSLOT}"])=4 or last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.status["{#DISKSLOT}"])=9'
                   name: 'Disk {#DISKSLOT} is off-line/unhealthy on {HOST.NAME}'
-                  opdata: 'Disque réel : slot {?last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.slot[{#SNMPINDEX}])} — statut : {ITEM.LASTVALUE1}'
+                  opdata: 'Disque réel : slot {?last(/PIC - Dell EqualLogic PS by SNMP/eql.disk.slot["{#DISKSLOT}"])} — statut : {ITEM.LASTVALUE1}'
                   priority: AVERAGE
             - uuid: 1ab580e2257f4779ba8dfa1c22ebf65b
               name: 'Disk {#DISKSLOT} Slot'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.12740.3.1.1.1.10.{#SNMPINDEX}'
-              key: 'eql.disk.slot[{#SNMPINDEX}]'
+              key: 'eql.disk.slot["{#DISKSLOT}"]'
               delay: 5m
               history: 90d
               value_type: TEXT
@@ -374,7 +374,7 @@ zabbix_export:
               name: 'Disk {#DISKSLOT} Size'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.12740.3.1.1.1.6.{#SNMPINDEX}'
-              key: 'eql.disk.size[{#SNMPINDEX}]'
+              key: 'eql.disk.size["{#DISKSLOT}"]'
               delay: 1h
               history: 90d
               units: B
@@ -395,7 +395,7 @@ zabbix_export:
               name: 'Temperature {#SENSOR}'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.12740.2.1.6.1.3.{#SNMPINDEX}'
-              key: 'eql.temp.value[{#SNMPINDEX}]'
+              key: 'eql.temp.value["{#SENSOR}"]'
               delay: 3m
               history: 90d
               units: °C
@@ -404,18 +404,18 @@ zabbix_export:
                   value: 'System Health'
               trigger_prototypes:
                 - uuid: f97f90d71f0b4f84852a9e1154001491
-                  expression: 'avg(/PIC - Dell EqualLogic PS by SNMP/eql.temp.value[{#SNMPINDEX}],#3)>{$TEMP_CRIT}'
+                  expression: 'avg(/PIC - Dell EqualLogic PS by SNMP/eql.temp.value["{#SENSOR}"],#3)>{$TEMP_CRIT}'
                   name: 'Temperature {#SENSOR} is CRITICAL on {HOST.NAME}'
                   opdata: 'Current: {ITEM.LASTVALUE1} °C'
                   priority: HIGH
                 - uuid: b414f788906b449c97187ee113586a72
-                  expression: 'avg(/PIC - Dell EqualLogic PS by SNMP/eql.temp.value[{#SNMPINDEX}],#3)>{$TEMP_WARN}'
+                  expression: 'avg(/PIC - Dell EqualLogic PS by SNMP/eql.temp.value["{#SENSOR}"],#3)>{$TEMP_WARN}'
                   name: 'Temperature {#SENSOR} is HIGH on {HOST.NAME}'
                   opdata: 'Current: {ITEM.LASTVALUE1} °C'
                   priority: WARNING
                   dependencies:
                     - name: 'Temperature {#SENSOR} is CRITICAL on {HOST.NAME}'
-                      expression: 'avg(/PIC - Dell EqualLogic PS by SNMP/eql.temp.value[{#SNMPINDEX}],#3)>{$TEMP_CRIT}'
+                      expression: 'avg(/PIC - Dell EqualLogic PS by SNMP/eql.temp.value["{#SENSOR}"],#3)>{$TEMP_CRIT}'
         - uuid: 1e9f8eee69154609b2b9697f71a211a3
           name: Fans
           type: SNMP_AGENT
@@ -430,7 +430,7 @@ zabbix_export:
               name: 'Fan {#FAN} Speed'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.12740.2.1.7.1.3.{#SNMPINDEX}'
-              key: 'eql.fan.speed[{#SNMPINDEX}]'
+              key: 'eql.fan.speed["{#FAN}"]'
               delay: 3m
               history: 90d
               units: rpm
@@ -439,7 +439,7 @@ zabbix_export:
                   value: 'System Health'
               trigger_prototypes:
                 - uuid: f5ed31cfb6834cff8a5d00f56d3c3052
-                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.fan.speed[{#SNMPINDEX}])<200 and last(/PIC - Dell EqualLogic PS by SNMP/eql.fan.speed[{#SNMPINDEX}])>=0'
+                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.fan.speed["{#FAN}"])<200 and last(/PIC - Dell EqualLogic PS by SNMP/eql.fan.speed["{#FAN}"])>=0'
                   name: 'Fan {#FAN} stopped on {HOST.NAME}'
                   opdata: 'Current speed: {ITEM.LASTVALUE1} rpm'
                   priority: AVERAGE
@@ -457,7 +457,7 @@ zabbix_export:
               name: 'Power Supply {#PSU} Status'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.12740.2.1.8.1.3.{#SNMPINDEX}'
-              key: 'eql.psu.status[{#SNMPINDEX}]'
+              key: 'eql.psu.status["{#PSU}"]'
               delay: 5m
               history: 90d
               description: '[1] on-and-operating  [2] no-ac-power  [3] failed-or-no-data'
@@ -468,7 +468,7 @@ zabbix_export:
                   value: 'System Health'
               trigger_prototypes:
                 - uuid: 843b2c02f8e544388fe21589ea448835
-                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.psu.status[{#SNMPINDEX}])<>1'
+                  expression: 'last(/PIC - Dell EqualLogic PS by SNMP/eql.psu.status["{#PSU}"])<>1'
                   name: 'Power Supply {#PSU} problem on {HOST.NAME}'
                   opdata: 'Current status: {ITEM.LASTVALUE1}'
                   priority: HIGH

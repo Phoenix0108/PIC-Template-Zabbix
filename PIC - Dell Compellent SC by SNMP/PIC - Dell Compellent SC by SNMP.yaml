@@ -173,7 +173,7 @@ zabbix_export:
               name: 'Controller {#CTLR} Status'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.13.1.3.{#SNMPINDEX}'
-              key: 'sc.ctlr.status[{#SNMPINDEX}]'
+              key: 'sc.ctlr.status["{#CTLR}"]'
               delay: 60s
               history: 90d
               description: '[1] up  [2] down  [3] degraded'
@@ -184,12 +184,12 @@ zabbix_export:
                   value: Controller
               trigger_prototypes:
                 - uuid: dacd1b61120f4644ba6d8afceaac593e
-                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.ctlr.status[{#SNMPINDEX}])=2'
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.ctlr.status["{#CTLR}"])=2'
                   name: 'Controller {#CTLR} is DOWN on {HOST.NAME}'
                   opdata: 'Current status: {ITEM.LASTVALUE1}'
                   priority: DISASTER
                 - uuid: ffbb5bb4dfd045bbae1fe2657f368495
-                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.ctlr.status[{#SNMPINDEX}])=3'
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.ctlr.status["{#CTLR}"])=3'
                   name: 'Controller {#CTLR} is DEGRADED on {HOST.NAME}'
                   opdata: 'Current status: {ITEM.LASTVALUE1}'
                   priority: HIGH
@@ -197,7 +197,7 @@ zabbix_export:
               name: 'Controller {#CTLR} Model'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.13.1.7.{#SNMPINDEX}'
-              key: 'sc.ctlr.model[{#SNMPINDEX}]'
+              key: 'sc.ctlr.model["{#CTLR}"]'
               delay: 1h
               history: 90d
               value_type: TEXT
@@ -214,15 +214,16 @@ zabbix_export:
           enabled_lifetime_type: DISABLE_NEVER
           description: |
             Découverte des disques physiques (scDiskTable). {#DISK} = position enceinte-disque (ee-dd).
-            NB : l'index interne scDiskIndex de Compellent n'est pas stable (réattribué aux rescans).
-            La position réelle est donc relue en direct (item Position) et affichée dans l'opdata des alertes,
-            afin que l'étiquette ne puisse jamais désigner le mauvais disque.
+            NB : l'index interne scDiskIndex de Compellent n'est PAS stable (réattribué aux rescans).
+            Les items sont donc indexés sur la POSITION physique ({#DISK}), pas sur l'index SNMP : la clé
+            reste constante à vie (ex. sc.disk.healthy["01-03"]) et seul l'OID est mis à jour quand
+            l'index bouge — plus aucun item orphelin ni alerte mal étiquetée.
           item_prototypes:
             - uuid: e5d0b0dfecfa4488a67c3dda29607298
               name: 'Disk {#DISK} Healthy'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.14.1.5.{#SNMPINDEX}'
-              key: 'sc.disk.healthy[{#SNMPINDEX}]'
+              key: 'sc.disk.healthy["{#DISK}"]'
               delay: 5m
               history: 90d
               description: '[1] true (intègre)  [2] false (non intègre) — équivalent de la colonne « Intègre » du GUI Dell.'
@@ -233,16 +234,16 @@ zabbix_export:
                   value: Disk
               trigger_prototypes:
                 - uuid: 8cd9ad682077438c824093a742b2bf5e
-                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.disk.healthy[{#SNMPINDEX}])=2'
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.disk.healthy["{#DISK}"])=2'
                   name: 'Disk {#DISK} is NOT healthy on {HOST.NAME}'
-                  opdata: 'Disque réel : {?last(/PIC - Dell Compellent SC by SNMP/sc.disk.position[{#SNMPINDEX}])} — Intègre : Non'
+                  opdata: 'Disque réel : {?last(/PIC - Dell Compellent SC by SNMP/sc.disk.position["{#DISK}"])} — Intègre : Non'
                   priority: HIGH
                   description: 'Le disque signale « Intègre : Non » (scDiskHealthy=false). Le disque physique concerné est indiqué en opdata (position relue en direct).'
             - uuid: da7d4f5fb4c44dea9c97b04ee2a78632
               name: 'Disk {#DISK} Position'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.14.1.4.{#SNMPINDEX}'
-              key: 'sc.disk.position[{#SNMPINDEX}]'
+              key: 'sc.disk.position["{#DISK}"]'
               delay: 5m
               history: 90d
               value_type: TEXT
@@ -254,7 +255,7 @@ zabbix_export:
               name: 'Disk {#DISK} Status'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.14.1.3.{#SNMPINDEX}'
-              key: 'sc.disk.status[{#SNMPINDEX}]'
+              key: 'sc.disk.status["{#DISK}"]'
               delay: 5m
               history: 90d
               description: '[1] up  [2] down  [3] degraded (état de service — informatif ; l''alerte se base sur « Intègre »).'
@@ -267,7 +268,7 @@ zabbix_export:
               name: 'Disk {#DISK} Size'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.14.1.9.{#SNMPINDEX}'
-              key: 'sc.disk.size[{#SNMPINDEX}]'
+              key: 'sc.disk.size["{#DISK}"]'
               delay: 1h
               history: 90d
               units: B
@@ -293,7 +294,7 @@ zabbix_export:
               name: 'Enclosure {#ENCL} Status'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.15.1.3.{#SNMPINDEX}'
-              key: 'sc.encl.status[{#SNMPINDEX}]'
+              key: 'sc.encl.status["{#ENCL}"]'
               delay: 60s
               history: 90d
               description: '[1] up  [2] down  [3] degraded'
@@ -304,12 +305,12 @@ zabbix_export:
                   value: Enclosure
               trigger_prototypes:
                 - uuid: 293567c3ccbd46beb8b7e28b9b9f55fe
-                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.encl.status[{#SNMPINDEX}])=2'
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.encl.status["{#ENCL}"])=2'
                   name: 'Enclosure {#ENCL} is DOWN on {HOST.NAME}'
                   opdata: 'Current status: {ITEM.LASTVALUE1}'
                   priority: HIGH
                 - uuid: bddc0572a2584f369ce6206bf7a0a13d
-                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.encl.status[{#SNMPINDEX}])=3'
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.encl.status["{#ENCL}"])=3'
                   name: 'Enclosure {#ENCL} is DEGRADED on {HOST.NAME}'
                   opdata: 'Current status: {ITEM.LASTVALUE1}'
                   priority: AVERAGE
@@ -327,7 +328,7 @@ zabbix_export:
               name: 'Temperature {#SENSOR}'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.23.1.5.{#SNMPINDEX}'
-              key: 'sc.temp.value[{#SNMPINDEX}]'
+              key: 'sc.temp.value["{#SENSOR}"]'
               delay: 3m
               history: 90d
               units: °C
@@ -336,23 +337,23 @@ zabbix_export:
                   value: 'System Health'
               trigger_prototypes:
                 - uuid: b15516a86f3a4b7c987dbb3ce5d5f18c
-                  expression: 'avg(/PIC - Dell Compellent SC by SNMP/sc.temp.value[{#SNMPINDEX}],#3)>{$TEMP_CRIT}'
+                  expression: 'avg(/PIC - Dell Compellent SC by SNMP/sc.temp.value["{#SENSOR}"],#3)>{$TEMP_CRIT}'
                   name: 'Temperature {#SENSOR} is CRITICAL on {HOST.NAME}'
                   opdata: 'Current: {ITEM.LASTVALUE1} °C'
                   priority: HIGH
                 - uuid: 183bfeab5e534c90b60e95accd7439e4
-                  expression: 'avg(/PIC - Dell Compellent SC by SNMP/sc.temp.value[{#SNMPINDEX}],#3)>{$TEMP_WARN}'
+                  expression: 'avg(/PIC - Dell Compellent SC by SNMP/sc.temp.value["{#SENSOR}"],#3)>{$TEMP_WARN}'
                   name: 'Temperature {#SENSOR} is HIGH on {HOST.NAME}'
                   opdata: 'Current: {ITEM.LASTVALUE1} °C'
                   priority: WARNING
                   dependencies:
                     - name: 'Temperature {#SENSOR} is CRITICAL on {HOST.NAME}'
-                      expression: 'avg(/PIC - Dell Compellent SC by SNMP/sc.temp.value[{#SNMPINDEX}],#3)>{$TEMP_CRIT}'
+                      expression: 'avg(/PIC - Dell Compellent SC by SNMP/sc.temp.value["{#SENSOR}"],#3)>{$TEMP_CRIT}'
             - uuid: 0d07f754613f42698694ba5879208985
               name: 'Temperature {#SENSOR} Status'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.23.1.3.{#SNMPINDEX}'
-              key: 'sc.temp.status[{#SNMPINDEX}]'
+              key: 'sc.temp.status["{#SENSOR}"]'
               delay: 5m
               history: 90d
               valuemap:
@@ -374,7 +375,7 @@ zabbix_export:
               name: 'Fan {#FAN} Status'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.20.1.3.{#SNMPINDEX}'
-              key: 'sc.fan.status[{#SNMPINDEX}]'
+              key: 'sc.fan.status["{#FAN}"]'
               delay: 60s
               history: 90d
               description: '[1] up  [2] down  [3] degraded'
@@ -385,7 +386,7 @@ zabbix_export:
                   value: 'System Health'
               trigger_prototypes:
                 - uuid: 933af28300ae41cb8e653ef88ad80d03
-                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.fan.status[{#SNMPINDEX}])<>1'
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.fan.status["{#FAN}"])<>1'
                   name: 'Fan {#FAN} problem on {HOST.NAME}'
                   opdata: 'Current status: {ITEM.LASTVALUE1}'
                   priority: AVERAGE
@@ -393,7 +394,7 @@ zabbix_export:
               name: 'Fan {#FAN} Speed'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.20.1.5.{#SNMPINDEX}'
-              key: 'sc.fan.speed[{#SNMPINDEX}]'
+              key: 'sc.fan.speed["{#FAN}"]'
               delay: 5m
               history: 90d
               value_type: TEXT
@@ -415,7 +416,7 @@ zabbix_export:
               name: 'Power Supply {#PSU} Status'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.21.1.3.{#SNMPINDEX}'
-              key: 'sc.psu.status[{#SNMPINDEX}]'
+              key: 'sc.psu.status["{#PSU}"]'
               delay: 60s
               history: 90d
               description: '[1] up  [2] down  [3] degraded'
@@ -426,7 +427,7 @@ zabbix_export:
                   value: 'System Health'
               trigger_prototypes:
                 - uuid: eaae0aafcd83483bb0a053d87a7cd160
-                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.psu.status[{#SNMPINDEX}])<>1'
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.psu.status["{#PSU}"])<>1'
                   name: 'Power Supply {#PSU} problem on {HOST.NAME}'
                   opdata: 'Current status: {ITEM.LASTVALUE1}'
                   priority: HIGH
@@ -444,7 +445,7 @@ zabbix_export:
               name: 'Volume {#VOLUME} Status'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.26.1.3.{#SNMPINDEX}'
-              key: 'sc.volume.status[{#SNMPINDEX}]'
+              key: 'sc.volume.status["{#VOLUME}"]'
               delay: 5m
               history: 90d
               description: '[1] up  [2] down  [3] degraded'
@@ -455,12 +456,12 @@ zabbix_export:
                   value: Volume
               trigger_prototypes:
                 - uuid: 59b4e1d7d57e47a0a0a7040647ae9c31
-                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.volume.status[{#SNMPINDEX}])=2'
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.volume.status["{#VOLUME}"])=2'
                   name: 'Volume {#VOLUME} is DOWN on {HOST.NAME}'
                   opdata: 'Current status: {ITEM.LASTVALUE1}'
                   priority: HIGH
                 - uuid: 138ade0e2d114ddfaccbb03e0372d240
-                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.volume.status[{#SNMPINDEX}])=3'
+                  expression: 'last(/PIC - Dell Compellent SC by SNMP/sc.volume.status["{#VOLUME}"])=3'
                   name: 'Volume {#VOLUME} is DEGRADED on {HOST.NAME}'
                   opdata: 'Current status: {ITEM.LASTVALUE1}'
                   priority: AVERAGE
@@ -575,7 +576,7 @@ zabbix_export:
               name: 'Disk Folder #{#DFNBR} Total Space'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.32.1.3.{#SNMPINDEX}'
-              key: 'sc.capacity.total[{#SNMPINDEX}]'
+              key: 'sc.capacity.total["{#DFNBR}"]'
               delay: 5m
               history: 90d
               units: B
@@ -590,7 +591,7 @@ zabbix_export:
               name: 'Disk Folder #{#DFNBR} Used Space'
               type: SNMP_AGENT
               snmp_oid: '1.3.6.1.4.1.16139.2.32.1.4.{#SNMPINDEX}'
-              key: 'sc.capacity.used[{#SNMPINDEX}]'
+              key: 'sc.capacity.used["{#DFNBR}"]'
               delay: 5m
               history: 90d
               units: B
@@ -604,40 +605,40 @@ zabbix_export:
             - uuid: bc17588df4ab4830af04c6f8e283ebc7
               name: 'Disk Folder #{#DFNBR} Free Space'
               type: CALCULATED
-              key: 'sc.capacity.free[{#SNMPINDEX}]'
+              key: 'sc.capacity.free["{#DFNBR}"]'
               delay: 5m
               history: 90d
               units: B
-              params: 'last(//sc.capacity.total[{#SNMPINDEX}])-last(//sc.capacity.used[{#SNMPINDEX}])'
+              params: 'last(//sc.capacity.total["{#DFNBR}"])-last(//sc.capacity.used["{#DFNBR}"])'
               tags:
                 - tag: Application
                   value: Capacity
             - uuid: fcafa14486574741ab8d90eeb59b56fa
               name: 'Disk Folder #{#DFNBR} Used (%)'
               type: CALCULATED
-              key: 'sc.capacity.pct[{#SNMPINDEX}]'
+              key: 'sc.capacity.pct["{#DFNBR}"]'
               delay: 5m
               history: 90d
               value_type: FLOAT
               units: '%'
-              params: 'last(//sc.capacity.used[{#SNMPINDEX}])/last(//sc.capacity.total[{#SNMPINDEX}])*100'
+              params: 'last(//sc.capacity.used["{#DFNBR}"])/last(//sc.capacity.total["{#DFNBR}"])*100'
               tags:
                 - tag: Application
                   value: Capacity
               trigger_prototypes:
                 - uuid: bcd4b43128b94f3b8759d6646f6d12f2
-                  expression: 'min(/PIC - Dell Compellent SC by SNMP/sc.capacity.pct[{#SNMPINDEX}],30m)>{$STORAGE_UTIL_HIGH}'
+                  expression: 'min(/PIC - Dell Compellent SC by SNMP/sc.capacity.pct["{#DFNBR}"],30m)>{$STORAGE_UTIL_HIGH}'
                   name: 'Disk Folder #{#DFNBR} usage is CRITICAL on {HOST.NAME}'
                   opdata: 'Current usage: {ITEM.LASTVALUE1}'
                   priority: HIGH
                 - uuid: 96b0f513481d474ab8fc8aa12e9e339b
-                  expression: 'min(/PIC - Dell Compellent SC by SNMP/sc.capacity.pct[{#SNMPINDEX}],30m)>{$STORAGE_UTIL_WARN}'
+                  expression: 'min(/PIC - Dell Compellent SC by SNMP/sc.capacity.pct["{#DFNBR}"],30m)>{$STORAGE_UTIL_WARN}'
                   name: 'Disk Folder #{#DFNBR} usage is HIGH on {HOST.NAME}'
                   opdata: 'Current usage: {ITEM.LASTVALUE1}'
                   priority: WARNING
                   dependencies:
                     - name: 'Disk Folder #{#DFNBR} usage is CRITICAL on {HOST.NAME}'
-                      expression: 'min(/PIC - Dell Compellent SC by SNMP/sc.capacity.pct[{#SNMPINDEX}],30m)>{$STORAGE_UTIL_HIGH}'
+                      expression: 'min(/PIC - Dell Compellent SC by SNMP/sc.capacity.pct["{#DFNBR}"],30m)>{$STORAGE_UTIL_HIGH}'
       tags:
         - tag: class
           value: storage
